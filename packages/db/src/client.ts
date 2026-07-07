@@ -15,11 +15,17 @@ let pool: Sql | null = null;
 
 export function getDb(): Sql {
   if (!pool) {
-    pool = postgres(env.DATABASE_URL, {
+    const dbUrl = env.DATABASE_URL;
+    // Supabase's transaction pooler (pgBouncer, :6543) cannot use prepared
+    // statements; the session pooler / direct connection can.
+    const isPooler = /pooler\.supabase\.com|pgbouncer=true|:6543(\b|\/)/.test(dbUrl);
+    const isLocal = /@(localhost|127\.0\.0\.1)/.test(dbUrl);
+    pool = postgres(dbUrl, {
       max: env.NODE_ENV === 'production' ? 20 : 5,
       idle_timeout: 30,
       connect_timeout: 15,
-      prepare: true,
+      prepare: !isPooler,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
       transform: { undefined: null },
     });
   }

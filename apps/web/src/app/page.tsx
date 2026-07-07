@@ -1,17 +1,27 @@
+import { MarketingNav } from '@/components/marketing/marketing-nav';
+import { Hero } from '@/components/marketing/hero';
+import { HowItWorks } from '@/components/marketing/how-it-works';
+import { PipelineShowcase } from '@/components/marketing/pipeline-showcase';
+import { Examples } from '@/components/marketing/examples';
+import { Features } from '@/components/marketing/features';
+import { Pricing } from '@/components/marketing/pricing';
+import { Faq } from '@/components/marketing/faq';
+import { CtaFooter } from '@/components/marketing/cta-footer';
+
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-4 px-6">
-      <h1 className="text-3xl font-semibold tracking-tight">yulia-video</h1>
-      <p className="text-neutral-600 dark:text-neutral-400">
-        Voiceover → cinematic YouTube video. The dashboard ships in Phase 7; the REST API and
-        pipeline are being built phase by phase.
-      </p>
-      <p className="text-sm text-neutral-500">
-        API health:{' '}
-        <a className="underline" href="/api/health">
-          /api/health
-        </a>
-      </p>
-    </main>
+    <div className="relative min-h-screen overflow-x-hidden bg-bg">
+      <MarketingNav />
+      <main>
+        <Hero />
+        <HowItWorks />
+        <PipelineShowcase />
+        <Examples />
+        <Features />
+        <Pricing />
+        <Faq />
+        <CtaFooter />
+      </main>
+    </div>
   );
 }

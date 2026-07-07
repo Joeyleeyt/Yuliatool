@@ -24,19 +24,25 @@ export class RateLimiter {
 
   async check(identifier: string, limit: number, windowSec: number): Promise<RateLimitResult> {
     const key = `ratelimit:${identifier}`;
-    const [current, ttl] = (await this.redis.eval(
-      RateLimiter.LUA,
-      1,
-      key,
-      String(windowSec),
-    )) as [number, number];
+    try {
+      const [current, ttl] = (await this.redis.eval(
+        RateLimiter.LUA,
+        1,
+        key,
+        String(windowSec),
+      )) as [number, number];
 
-    const remaining = Math.max(0, limit - current);
-    return {
-      allowed: current <= limit,
-      remaining,
-      limit,
-      resetSec: ttl < 0 ? windowSec : ttl,
-    };
+      const remaining = Math.max(0, limit - current);
+      return {
+        allowed: current <= limit,
+        remaining,
+        limit,
+        resetSec: ttl < 0 ? windowSec : ttl,
+      };
+    } catch {
+      // Fail open: if Redis is unavailable, don't block requests (dev-friendly;
+      // acceptable degradation in prod — the limiter is a safeguard, not a gate).
+      return { allowed: true, remaining: limit, limit, resetSec: windowSec };
+    }
   }
 }

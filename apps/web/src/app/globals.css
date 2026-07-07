@@ -2,10 +2,186 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ *
+ * yulia-video — cinematic dark design system
+ * Tokens are raw "R G B" channels so Tailwind can apply /alpha.
+ * ------------------------------------------------------------------ */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
+
+  /* Surfaces (deep black → charcoals) */
+  --bg: 8 8 10;
+  --surface-1: 15 15 18;
+  --surface-2: 21 21 25;
+  --surface-3: 28 28 33;
+
+  /* Hairlines & text */
+  --border: 255 255 255; /* used at low alpha */
+  --fg: 244 244 246;
+  --fg-muted: 161 161 172;
+  --fg-subtle: 112 112 124;
+
+  /* Semantic accents */
+  --accent: 139 92 246; /* violet  — AI intelligence   */
+  --accent-soft: 167 139 250;
+  --success: 52 211 153; /* emerald — completed         */
+  --warning: 251 191 36; /* amber   — processing        */
+  --danger: 248 113 113; /* red     — errors            */
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  /* Elevation */
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 24px 60px -24px rgb(0 0 0 / 0.7);
+  --glow-accent: 0 0 0 1px rgb(var(--accent) / 0.2), 0 12px 40px -12px rgb(var(--accent) / 0.35);
+
+  /* Film grain (fractal noise) */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-body {
-  @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+@layer base {
+  * {
+    border-color: rgb(var(--border) / 0.08);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.28);
+    color: rgb(var(--fg));
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.7);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border) / 0.12) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--border) / 0.1);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--border) / 0.18);
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  /* Soft film grain overlay */
+  .bg-grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--grain);
+    opacity: 0.035;
+    mix-blend-mode: screen;
+    z-index: 0;
+  }
+
+  /* Frosted charcoal glass */
+  .glass {
+    background: rgb(var(--surface-1) / 0.72);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  /* Accent → soft gradient text */
+  .text-gradient {
+    background: linear-gradient(180deg, rgb(var(--fg)) 0%, rgb(var(--fg-muted)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-accent {
+    background: linear-gradient(120deg, rgb(var(--accent-soft)) 0%, rgb(var(--accent)) 60%, rgb(236 176 255) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline top highlight for elevated cards */
+  .ring-hairline {
+    box-shadow: inset 0 1px 0 0 rgb(var(--border) / 0.06);
+  }
+
+  .animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--accent) / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgb(var(--accent) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--accent) / 0);
+  }
+}
+
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

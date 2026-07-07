@@ -18,22 +18,36 @@ const LOCK_PREFIX = 'lock:';
 export class RedisCache implements CacheService {
   constructor(private readonly redis: Redis = getRedis()) {}
 
+  // All reads/writes fail soft: if Redis is unreachable, the cache behaves as a
+  // permanent miss so the app keeps working (uncached) instead of erroring.
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.redis.get(KEY_PREFIX + key);
-    return raw === null ? null : (JSON.parse(raw) as T);
+    try {
+      const raw = await this.redis.get(KEY_PREFIX + key);
+      return raw === null ? null : (JSON.parse(raw) as T);
+    } catch {
+      return null;
+    }
   }
 
   async set<T>(key: string, value: T, ttlSec?: number): Promise<void> {
-    const payload = JSON.stringify(value);
-    if (ttlSec && ttlSec > 0) {
-      await this.redis.set(KEY_PREFIX + key, payload, 'EX', ttlSec);
-    } else {
-      await this.redis.set(KEY_PREFIX + key, payload);
+    try {
+      const payload = JSON.stringify(value);
+      if (ttlSec && ttlSec > 0) {
+        await this.redis.set(KEY_PREFIX + key, payload, 'EX', ttlSec);
+      } else {
+        await this.redis.set(KEY_PREFIX + key, payload);
+      }
+    } catch {
+      // ignore — cache write is best-effort
     }
   }
 
   async del(key: string): Promise<void> {
-    await this.redis.del(KEY_PREFIX + key);
+    try {
+      await this.redis.del(KEY_PREFIX + key);
+    } catch {
+      // ignore
+    }
   }
 
   async remember<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
