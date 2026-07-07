@@ -1,0 +1,130 @@
+import {
+  ProjectStatus,
+  ProjectStateMachine,
+  NotFoundError,
+  ValidationError,
+  R2_PREFIX,
+  type CreateProjectInput,
+  type UpdateProjectInput,
+  type ProjectListQuery,
+  type Paginated,
+} from '@yulia/core';
+import type { ProjectRow } from '@yulia/db';
+import type { AppContext } from '../context.js';
+import { RecoveryService } from './recovery.service.js';
+
+/**
+ * Project lifecycle + CRUD. Ownership is enforced here: read/mutate methods
+ * take the acting `ownerId` and throw NotFound (not Forbidden — don't leak
+ * existence) when a project isn't owned by the caller.
+ */
+export class ProjectService {
+  constructor(private readonly ctx: AppContext) {}
+
+  async create(ownerId: string, input: CreateProjectInput): Promise<ProjectRow> {
+    const project = await this.ctx.repos.projects.create({
+      ownerId,
+      title: input.title,
+      description: input.description ?? null,
+      renderFormat: input.renderFormat,
+    });
+    await this.ctx.repos.activity.log({
+      projectId: project.id,
+      actorId: ownerId,
+      type: 'project_created',
+      message: `Project "${project.title}" created`,
+    });
+    return project;
+  }
+
+  async get(id: string, ownerId: string): Promise<ProjectRow> {
+    const project = await this.ctx.repos.projects.findByIdForOwner(id, ownerId);
+    if (!project) throw new NotFoundError('Project', id);
+    return project;
+  }
+
+  async list(ownerId: string, query: ProjectListQuery): Promise<Paginated<ProjectRow>> {
+    const { items, total } = await this.ctx.repos.projects.list({
+      ownerId,
+      limit: query.limit,
+      offset: query.offset,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search ? { search: query.search } : {}),
+    });
+    return { items, total, limit: query.limit, offset: query.offset };
+  }
+
+  async update(id: string, ownerId: string, input: UpdateProjectInput): Promise<ProjectRow> {
+    await this.get(id, ownerId); // ownership guard
+    const updated = await this.ctx.repos.projects.update(id, {
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.renderFormat !== undefined ? { renderFormat: input.renderFormat } : {}),
+    });
+    if (!updated) throw new NotFoundError('Project', id);
+    return updated;
+  }
+
+  /** Delete the project and all its R2 objects (prefix delete). DB cascades handle rows. */
+  async remove(id: string, ownerId: string): Promise<void> {
+    await this.get(id, ownerId); // ownership guard
+    await this.ctx.storage.deletePrefix(`${R2_PREFIX.project(id)}/`);
+    await this.ctx.repos.projects.deleteById(id);
+    this.ctx.logger.info({ projectId: id, ownerId }, 'project removed');
+  }
+
+  /**
+   * Validated status transition. Used by upload finalize and (later) every
+   * worker stage. Loads current status, asserts legality, persists, logs.
+   */
+  async transition(id: string, to: ProjectStatus): Promise<ProjectRow> {
+    const current = await this.ctx.repos.projects.findById(id);
+    if (!current) throw new NotFoundError('Project', id);
+    ProjectStateMachine.assertTransition(current.status, to);
+    const updated = await this.ctx.repos.projects.applyStatus(id, {
+      status: to,
+      errorCode: null,
+      errorMessage: null,
+      failedAt: null,
+    });
+    await this.ctx.repos.activity.log({
+      projectId: id,
+      type: 'status_changed',
+      message: `${current.status} → ${to}`,
+      data: { from: current.status, to },
+    });
+    return updated!;
+  }
+
+  /**
+   * Retry a FAILED project: re-plan from persisted state and re-dispatch the
+   * earliest incomplete stage (force). Ownership-guarded.
+   */
+  async retry(id: string, ownerId: string): Promise<ProjectRow> {
+    const project = await this.get(id, ownerId);
+    if (project.status !== ProjectStatus.FAILED) {
+      throw new ValidationError('Only failed projects can be retried', { status: project.status });
+    }
+    await new RecoveryService(this.ctx).resume(id);
+    const updated = await this.ctx.repos.projects.findById(id);
+    return updated!;
+  }
+
+  /** Move a project to FAILED from any active state, recording the cause. */
+  async fail(id: string, error: { code: string; message: string }): Promise<ProjectRow> {
+    const updated = await this.ctx.repos.projects.applyStatus(id, {
+      status: ProjectStatus.FAILED,
+      errorCode: error.code,
+      errorMessage: error.message,
+      failedAt: new Date().toISOString(),
+    });
+    if (!updated) throw new NotFoundError('Project', id);
+    await this.ctx.repos.activity.log({
+      projectId: id,
+      type: 'project_failed',
+      message: error.message,
+      data: { code: error.code },
+    });
+    return updated;
+  }
+}

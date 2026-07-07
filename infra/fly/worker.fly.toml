@@ -1,0 +1,36 @@
+# Fly.io — background worker (BullMQ consumers: transcription, AI, generation,
+# downloads, rendering). Runs FFmpeg, so it needs CPU, memory, and disk.
+app = "yulia-video-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../docker/worker.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  WORKER_CONCURRENCY = "4"
+
+# No [http_service]: the worker is not an HTTP app. It exposes a tiny health
+# server on 8080 for Fly checks only.
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  # Never auto-stop: workers must stay alive to drain queues and recover jobs.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+
+# Rendering is CPU + memory heavy; give it room. Scale count for throughput.
+[[vm]]
+  size = "performance-2x"
+  memory = "4gb"
+
+# Ephemeral scratch disk for FFmpeg asset download + render staging.
+[mounts]
+  source = "yulia_render_scratch"
+  destination = "/scratch"

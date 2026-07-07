@@ -1,0 +1,47 @@
+import type {
+  ProjectRow,
+  SceneRow,
+  PromptRow,
+  AssetRow,
+  TranscriptRow,
+  RenderRow,
+  ActivityLogRow,
+} from '@yulia/db';
+
+// Re-export row shapes as the API DTOs (server returns them directly).
+export type { ProjectRow, SceneRow, PromptRow, AssetRow, TranscriptRow, RenderRow, ActivityLogRow };
+
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface StatusView {
+  status: ProjectRow['status'];
+  totalScenes: number;
+  completedScenes: number;
+  progress: number;
+  errorMessage: string | null;
+}
+
+export interface SceneView extends SceneRow {
+  prompt: PromptRow | null;
+  assetUrl: string | null;
+  assetStatus: string | null;
+}
+
+export interface AssetView extends AssetRow {
+  url: string | null;
+}
+
+export interface RenderView {
+  render: RenderRow | null;
+  url: string | null;
+}
+
+export interface UploadTicket {
+  assetId: string;
+  upload: { url: string; key: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}

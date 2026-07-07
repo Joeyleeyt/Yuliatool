@@ -1,0 +1,189 @@
+import { createWriteStream, createReadStream } from 'node:fs';
+import { mkdir, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import {
+  AssetKind,
+  ProjectStatus,
+  SceneVisualType,
+  NotFoundError,
+  ValidationError,
+  R2_PREFIX,
+  RENDER_DIMENSIONS,
+  RENDER_ENCODING,
+  env,
+} from '@yulia/core';
+import type { SceneRow, Json } from '@yulia/db';
+import { renderVideo, type RenderSegment } from '@yulia/ffmpeg';
+import type { AppContext } from '../context.js';
+import { ProjectService } from './project.service.js';
+
+const SCRATCH_ROOT = process.env.SCRATCH_DIR ?? join(tmpdir(), 'yulia-render');
+/** Never let a crossfade exceed a segment; floor the on-screen duration. */
+const MIN_SEGMENT_SEC = 0.7;
+
+/**
+ * RENDERING stage. Downloads every stored asset + the voiceover to a scratch
+ * dir, runs the FFmpeg pipeline, uploads the MP4 to R2, and completes the
+ * project. Idempotent: a completed render short-circuits; scratch is always
+ * cleaned up.
+ */
+export class RenderService {
+  private readonly projects: ProjectService;
+
+  constructor(private readonly ctx: AppContext) {
+    this.projects = new ProjectService(ctx);
+  }
+
+  async run(projectId: string, renderId: string): Promise<void> {
+    const project = await this.ctx.repos.projects.findById(projectId);
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const render = await this.ctx.repos.renders.findById(renderId);
+    if (!render) throw new NotFoundError('Render', renderId);
+    if (render.status === 'completed') return;
+    if (project.status !== ProjectStatus.RENDERING) {
+      this.ctx.logger.info({ projectId, status: project.status }, 'render skipped (wrong state)');
+      return;
+    }
+
+    const scenes = await this.ctx.repos.scenes.listByProject(projectId);
+    if (scenes.length === 0) throw new ValidationError('No scenes to render', { projectId });
+
+    const voiceover = (await this.ctx.repos.assets.findByProject(projectId, AssetKind.VOICEOVER)).find(
+      (a) => a.status === 'stored' && a.r2_key,
+    );
+    if (!voiceover?.r2_key) throw new ValidationError('No stored voiceover', { projectId });
+
+    const transcript = await this.ctx.repos.transcripts.findByProject(projectId);
+    const audioDurationSec =
+      transcript?.duration_sec ?? scenes[scenes.length - 1]!.end_sec;
+
+    const { width, height } = RENDER_DIMENSIONS[project.render_format];
+    const workDir = join(SCRATCH_ROOT, projectId, renderId);
+
+    try {
+      await mkdir(workDir, { recursive: true });
+      await this.ctx.repos.renders.update(renderId, {
+        status: 'downloading_assets',
+        startedAt: new Date().toISOString(),
+        progress: 2,
+      });
+
+      // Download voiceover + each scene asset locally.
+      const voicePath = join(workDir, 'voiceover');
+      await this.download(voiceover.r2_key, voicePath);
+
+      const segments = await this.buildSegments(scenes, audioDurationSec, workDir);
+
+      await this.ctx.repos.renders.update(renderId, { status: 'normalizing', progress: 10 });
+
+      const outputPath = join(workDir, 'final.mp4');
+      let lastPersisted = 10;
+      const result = await renderVideo({
+        segments,
+        voiceoverPath: voicePath,
+        outputPath,
+        width,
+        height,
+        workDir,
+        onProgress: (p) => {
+          // Map pipeline 0..100 onto 10..90; throttle DB writes to ~5% steps.
+          const overall = 10 + Math.round(p.percent * 0.8);
+          if (overall - lastPersisted >= 5) {
+            lastPersisted = overall;
+            void this.ctx.repos.renders.update(renderId, {
+              progress: overall,
+              status: p.stage === 'mux' ? 'muxing' : 'concatenating',
+            });
+          }
+        },
+      });
+
+      // Upload the final MP4 to R2 (streamed, not buffered).
+      await this.ctx.repos.renders.update(renderId, { status: 'uploading', progress: 92 });
+      const renderKey = R2_PREFIX.render(projectId, renderId);
+      const { size } = await stat(outputPath);
+      await this.ctx.storage.putObject(renderKey, createReadStream(outputPath), {
+        contentType: 'video/mp4',
+        contentLength: size,
+      });
+
+      const asset = await this.ctx.repos.assets.create({
+        projectId,
+        kind: AssetKind.RENDER,
+        status: 'stored',
+        contentType: 'video/mp4',
+        r2Bucket: env.R2_BUCKET,
+        r2Key: renderKey,
+      });
+      await this.ctx.repos.assets.markStored(asset.id, {
+        r2Bucket: env.R2_BUCKET,
+        r2Key: renderKey,
+        contentType: 'video/mp4',
+        sizeBytes: size,
+        width,
+        height,
+        durationSec: result.durationSec,
+      });
+
+      await this.ctx.repos.renders.update(renderId, {
+        status: 'completed',
+        progress: 100,
+        assetId: asset.id,
+        durationSec: result.durationSec,
+        fps: RENDER_ENCODING.fps,
+        completedAt: new Date().toISOString(),
+      });
+
+      await this.projects.transition(projectId, ProjectStatus.COMPLETED);
+      await this.ctx.repos.activity.log({
+        projectId,
+        type: 'render_completed',
+        message: 'Final video rendered',
+        data: { renderId, key: renderKey, durationSec: result.durationSec } as unknown as Json,
+      });
+
+      this.ctx.logger.info({ projectId, renderId, key: renderKey }, 'render complete');
+    } finally {
+      await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
+  private async buildSegments(
+    scenes: SceneRow[],
+    audioDurationSec: number,
+    workDir: string,
+  ): Promise<RenderSegment[]> {
+    const segments: RenderSegment[] = [];
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i]!;
+      const isVideo = scene.visual_type === SceneVisualType.VIDEO;
+      const assetKind = isVideo ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
+      const asset = await this.ctx.repos.assets.findBySceneAndKind(scene.id, assetKind);
+      if (!asset?.r2_key) throw new ValidationError('Scene asset missing', { sceneId: scene.id });
+
+      const localPath = join(workDir, `seg_${String(i).padStart(4, '0')}`);
+      await this.download(asset.r2_key, localPath);
+
+      // Tile the timeline by scene start times so inter-scene pauses are covered
+      // and video length matches the continuous voiceover.
+      const next = scenes[i + 1];
+      const displayEnd = next ? next.start_sec : audioDurationSec;
+      const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
+
+      segments.push({
+        path: localPath,
+        type: scene.visual_type,
+        displayDurationSec,
+      });
+    }
+    return segments;
+  }
+
+  private async download(key: string, dest: string): Promise<void> {
+    const stream = await this.ctx.storage.getObjectStream(key);
+    await pipeline(stream, createWriteStream(dest));
+  }
+}

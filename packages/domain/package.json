@@ -1,0 +1,25 @@
+{
+  "name": "@yulia/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@yulia/core": "workspace:*",
+    "@yulia/db": "workspace:*",
+    "@yulia/ffmpeg": "workspace:*",
+    "@yulia/queue": "workspace:*",
+    "@yulia/services": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
