@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`dark ${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`}
+      className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-bg text-fg antialiased">

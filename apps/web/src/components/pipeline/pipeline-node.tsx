@@ -10,7 +10,7 @@ export type NodeState = 'done' | 'active' | 'pending' | 'error';
 
 const medallion: Record<NodeState, string> = {
   done: 'bg-success/12 text-success ring-success/30',
-  active: 'bg-accent/14 text-accent-soft ring-accent/40',
+  active: 'bg-accent/12 text-accent ring-accent/40 shadow-[0_8px_20px_-8px_rgb(var(--accent)/0.5)]',
   pending: 'bg-surface-2 text-fg-subtle ring-line/10',
   error: 'bg-danger/12 text-danger ring-danger/40',
 };
@@ -60,7 +60,10 @@ export function PipelineNode({
         </motion.div>
         {!isLast && (
           <div className="relative w-px flex-1 bg-line/10">
-            {state === 'done' && <div className="absolute inset-0 bg-success/40" />}
+            {state === 'done' && <div className="absolute inset-0 bg-success/50" />}
+            {state === 'active' && (
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-accent/50 to-transparent" />
+            )}
           </div>
         )}
       </div>
@@ -72,7 +75,9 @@ export function PipelineNode({
         disabled={!onClick}
         className={cn(
           'mb-4 flex-1 rounded-xl border p-4 text-left transition-colors',
-          state === 'active' ? 'border-accent/25 bg-surface-1' : 'border-line/8 bg-surface-1/60',
+          state === 'active'
+            ? 'border-accent/25 bg-accent/[0.04] shadow-soft'
+            : 'border-line/8 bg-surface-1/60',
           onClick && 'hover:border-line/20',
         )}
       >

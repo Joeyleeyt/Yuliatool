@@ -3,49 +3,52 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------ *
- * yulia-video — cinematic dark design system
+ * yulia-video — Bright Editorial Studio design system
+ * A calm gallery-white canvas with pure-white floating cards, soft
+ * ink-tinted shadows, and a violet↔blue AI accent pair.
  * Tokens are raw "R G B" channels so Tailwind can apply /alpha.
  * ------------------------------------------------------------------ */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Surfaces (deep black → charcoals) */
-  --bg: 8 8 10;
-  --surface-1: 15 15 18;
-  --surface-2: 21 21 25;
-  --surface-3: 28 28 33;
+  /* Surfaces — gallery canvas → pure-white cards → soft grey insets */
+  --bg: 247 248 250; /* #F7F8FA page canvas          */
+  --surface-1: 255 255 255; /* #FFFFFF floating cards       */
+  --surface-2: 245 247 250; /* subtle inset / hover        */
+  --surface-3: 238 241 245; /* deeper inset / nested       */
 
-  /* Hairlines & text */
-  --border: 255 255 255; /* used at low alpha */
-  --fg: 244 244 246;
-  --fg-muted: 161 161 172;
-  --fg-subtle: 112 112 124;
+  /* Hairlines & text — ink applied at low alpha */
+  --border: 16 24 40; /* used at low alpha → #E8EBEF-ish lines */
+  --fg: 16 24 40; /* #101828 primary text        */
+  --fg-muted: 102 112 133; /* #667085 secondary text      */
+  --fg-subtle: 152 162 179; /* #98A2B3 tertiary / hints    */
 
   /* Semantic accents */
-  --accent: 139 92 246; /* violet  — AI intelligence   */
-  --accent-soft: 167 139 250;
-  --success: 52 211 153; /* emerald — completed         */
-  --warning: 251 191 36; /* amber   — processing        */
-  --danger: 248 113 113; /* red     — errors            */
+  --accent: 109 94 248; /* #6D5EF8 violet — AI intelligence */
+  --accent-soft: 138 126 250; /* lifted violet for gradients      */
+  --accent-2: 79 140 255; /* #4F8CFF blue  — secondary accent */
+  --success: 22 163 74; /* #16A34A emerald — completed      */
+  --warning: 245 158 11; /* #F59E0B amber   — processing     */
+  --danger: 239 68 68; /* #EF4444 red     — errors         */
 
-  /* Radii */
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
+  /* Radii — generous, editorial (cards at 24px) */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
 
-  /* Elevation */
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
-  --shadow-lg: 0 24px 60px -24px rgb(0 0 0 / 0.7);
-  --glow-accent: 0 0 0 1px rgb(var(--accent) / 0.2), 0 12px 40px -12px rgb(var(--accent) / 0.35);
+  /* Elevation — soft, ink-tinted, never black. Cards should float. */
+  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04), 0 6px 20px -10px rgb(16 24 40 / 0.14);
+  --shadow-lg: 0 2px 6px rgb(16 24 40 / 0.05), 0 28px 60px -24px rgb(16 24 40 / 0.20);
+  --glow-accent: 0 0 0 1px rgb(var(--accent) / 0.16), 0 16px 44px -14px rgb(var(--accent) / 0.36);
 
-  /* Film grain (fractal noise) */
+  /* Film grain (fractal noise) — whispered via multiply on white */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @layer base {
   * {
-    border-color: rgb(var(--border) / 0.08);
+    border-color: rgb(var(--border) / 0.09);
   }
 
   html {
@@ -61,65 +64,65 @@
   }
 
   ::selection {
-    background: rgb(var(--accent) / 0.28);
+    background: rgb(var(--accent) / 0.18);
     color: rgb(var(--fg));
   }
 
   /* Focus ring */
   :focus-visible {
-    outline: 2px solid rgb(var(--accent) / 0.7);
+    outline: 2px solid rgb(var(--accent) / 0.55);
     outline-offset: 2px;
   }
 
   /* Scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(var(--border) / 0.12) transparent;
+    scrollbar-color: rgb(var(--border) / 0.16) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgb(var(--border) / 0.1);
+    background: rgb(var(--border) / 0.14);
     border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--border) / 0.18);
+    background: rgb(var(--border) / 0.24);
     background-clip: content-box;
   }
 }
 
 @layer utilities {
-  /* Soft film grain overlay */
+  /* Soft film grain overlay — subtle darkening specks on light surfaces */
   .bg-grain::before {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
     background-image: var(--grain);
-    opacity: 0.035;
-    mix-blend-mode: screen;
+    opacity: 0.04;
+    mix-blend-mode: multiply;
     z-index: 0;
   }
 
-  /* Frosted charcoal glass */
+  /* Frosted white glass — for topbar / floating nav */
   .glass {
-    background: rgb(var(--surface-1) / 0.72);
-    backdrop-filter: blur(16px) saturate(140%);
+    background: rgb(255 255 255 / 0.72);
+    backdrop-filter: blur(18px) saturate(180%);
   }
 
-  /* Accent → soft gradient text */
+  /* Editorial heading gradient — ink → slate */
   .text-gradient {
-    background: linear-gradient(180deg, rgb(var(--fg)) 0%, rgb(var(--fg-muted)) 100%);
+    background: linear-gradient(180deg, rgb(var(--fg)) 0%, rgb(var(--fg) / 0.62) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   .text-gradient-accent {
-    background: linear-gradient(120deg, rgb(var(--accent-soft)) 0%, rgb(var(--accent)) 60%, rgb(236 176 255) 100%);
+    background: linear-gradient(120deg, rgb(var(--accent-2)) 0%, rgb(var(--accent)) 55%, rgb(158 122 255) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -127,7 +130,7 @@
 
   /* Hairline top highlight for elevated cards */
   .ring-hairline {
-    box-shadow: inset 0 1px 0 0 rgb(var(--border) / 0.06);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.7);
   }
 
   .animate-shimmer {
@@ -147,7 +150,7 @@
 
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(var(--accent) / 0.5);
+    box-shadow: 0 0 0 0 rgb(var(--accent) / 0.4);
   }
   70% {
     box-shadow: 0 0 0 6px rgb(var(--accent) / 0);

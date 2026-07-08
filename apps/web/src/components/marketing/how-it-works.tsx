@@ -1,6 +1,7 @@
 import { Upload, Cpu, Download } from 'lucide-react';
 import { Section } from './section';
 import { Reveal } from '@/components/ui/motion';
+import { IconTile } from '@/components/ui/primitives';
 
 const STEPS = [
   {
@@ -32,12 +33,12 @@ export function HowItWorks() {
         {STEPS.map((step, i) => {
           const Icon = step.icon;
           return (
-            <Reveal key={step.title} delay={i * 0.08}>
-              <div className="group relative h-full overflow-hidden rounded-2xl border border-line/8 bg-surface-1 p-6 ring-hairline transition-colors hover:border-line/16">
+            <Reveal key={step.title} delay={i * 0.08} className="h-full">
+              <div className="group relative h-full overflow-hidden rounded-2xl border border-line/8 bg-surface-1 p-7 shadow-soft ring-hairline transition-all duration-300 ease-premium hover:-translate-y-1 hover:shadow-lg">
                 <div className="mb-5 flex items-center justify-between">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-surface-3 text-accent-soft">
+                  <IconTile>
                     <Icon className="h-5 w-5" />
-                  </div>
+                  </IconTile>
                   <span className="font-mono text-xs text-fg-subtle">0{i + 1}</span>
                 </div>
                 <h3 className="text-lg font-medium tracking-tight text-fg">{step.title}</h3>

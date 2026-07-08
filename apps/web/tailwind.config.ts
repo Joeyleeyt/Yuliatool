@@ -25,7 +25,9 @@ const config: Config = {
         accent: {
           DEFAULT: withAlpha('--accent'),
           soft: withAlpha('--accent-soft'),
+          2: withAlpha('--accent-2'),
         },
+        accent2: withAlpha('--accent-2'),
         success: withAlpha('--success'),
         warning: withAlpha('--warning'),
         danger: withAlpha('--danger'),
@@ -47,8 +49,11 @@ const config: Config = {
         glow: 'var(--glow-accent)',
       },
       backgroundImage: {
-        'accent-radial': 'radial-gradient(60% 60% at 50% 0%, rgb(var(--accent) / 0.16) 0%, transparent 70%)',
-        'accent-line': 'linear-gradient(90deg, transparent, rgb(var(--accent) / 0.6), transparent)',
+        'accent-radial': 'radial-gradient(60% 60% at 50% 0%, rgb(var(--accent) / 0.14) 0%, transparent 70%)',
+        'accent2-radial': 'radial-gradient(50% 50% at 85% 10%, rgb(var(--accent-2) / 0.12) 0%, transparent 70%)',
+        'accent-line': 'linear-gradient(90deg, transparent, rgb(var(--accent) / 0.5), transparent)',
+        'editorial-glow':
+          'radial-gradient(70% 55% at 50% -10%, rgb(var(--accent) / 0.10) 0%, transparent 60%), radial-gradient(45% 45% at 90% 0%, rgb(var(--accent-2) / 0.09) 0%, transparent 60%)',
       },
       letterSpacing: {
         tightest: '-0.04em',

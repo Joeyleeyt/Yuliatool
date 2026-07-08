@@ -22,16 +22,17 @@ export function Section({
       {(eyebrow || title || description) && (
         <Reveal className="mx-auto mb-14 max-w-2xl text-center">
           {eyebrow && (
-            <p className="mb-3 text-xs font-medium uppercase tracking-widest text-accent-soft">
+            <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-accent/15 bg-accent/[0.06] px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-accent">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
               {eyebrow}
-            </p>
+            </span>
           )}
           {title && (
-            <h2 className="text-balance text-3xl font-semibold tracking-tightest text-fg sm:text-4xl">
+            <h2 className="text-balance text-3xl font-semibold tracking-tightest text-fg sm:text-[2.6rem] sm:leading-[1.1]">
               {title}
             </h2>
           )}
-          {description && <p className="mt-4 text-fg-muted">{description}</p>}
+          {description && <p className="mt-4 text-lg text-fg-muted">{description}</p>}
         </Reveal>
       )}
       {children}

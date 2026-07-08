@@ -35,12 +35,12 @@ export function VideoPlayer({ id, title }: { id: string; title?: string }) {
         {ready ? (
           <video src={data.url!} controls poster={undefined} className="h-full w-full" />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-violet-500/15 to-transparent">
+          <div className="flex h-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-accent/25 via-accent-2/10 to-transparent">
             <div className="absolute inset-0 bg-grain" />
-            <Clapperboard className="relative h-8 w-8 text-white/50" />
+            <Clapperboard className="relative h-9 w-9 animate-pulse text-white/70" />
             <div className="relative w-64">
-              <div className="mb-2 flex justify-between font-mono text-xs text-white/70">
-                <span>Rendering…</span>
+              <div className="mb-2 flex justify-between font-mono text-xs text-white/80">
+                <span>Rendering your film…</span>
                 <span>{render.progress}%</span>
               </div>
               <Progress value={render.progress} />

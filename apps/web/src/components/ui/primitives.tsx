@@ -173,6 +173,37 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
+// --- IconTile ---------------------------------------------------------------
+// Signature editorial icon chip: violet→blue gradient tint with a soft accent
+// halo. The product's visual identity mark — used across marketing + app.
+const iconTileSizes = {
+  sm: 'h-9 w-9 rounded-lg',
+  md: 'h-11 w-11 rounded-xl',
+  lg: 'h-14 w-14 rounded-2xl',
+};
+export function IconTile({
+  children,
+  size = 'md',
+  className,
+}: {
+  children: React.ReactNode;
+  size?: keyof typeof iconTileSizes;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'grid shrink-0 place-items-center bg-gradient-to-br from-accent/12 to-accent-2/12 text-accent ring-1 ring-inset ring-accent/15',
+        'shadow-[0_8px_20px_-10px_rgb(var(--accent)/0.45)]',
+        iconTileSizes[size],
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 // --- Kbd (keyboard-first affordance) ---------------------------------------
 export function Kbd({ children }: { children: React.ReactNode }) {
   return (

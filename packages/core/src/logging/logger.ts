@@ -1,13 +1,23 @@
 import { pino, type Logger } from 'pino';
-import { env } from '../config/env.js';
 
 /**
  * Structured logging via pino. JSON in production (ingestible by Fly/Grafana),
  * pretty in dev. Always attach a correlation context (projectId, jobId) via
  * `logger.child({...})` at the worker/request boundary so lines are traceable.
+ *
+ * NOTE: the level is read straight from `process.env` (with a safe fallback)
+ * rather than the validated `env` proxy on purpose. This module is imported
+ * transitively by every route/module; touching the `env` proxy here would force
+ * full env validation at *import* time, which crashes `next build`'s page-data
+ * collection whenever a required secret is absent from the build environment.
+ * Logging bootstrap must never depend on the full runtime config being present.
  */
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const;
+const rawLevel = process.env.LOG_LEVEL;
+const level = (LOG_LEVELS as readonly string[]).includes(rawLevel ?? '') ? rawLevel! : 'info';
+
 const base: Logger = pino({
-  level: env.LOG_LEVEL,
+  level,
   base: { service: 'yulia-video' },
   timestamp: pino.stdTimeFunctions.isoTime,
   redact: {

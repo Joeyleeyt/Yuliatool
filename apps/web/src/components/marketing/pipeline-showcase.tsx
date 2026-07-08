@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Section } from './section';
+import { IconTile } from '@/components/ui/primitives';
 import { PIPELINE_STAGES } from '@/components/pipeline/stages';
 
 export function PipelineShowcase() {
@@ -13,8 +14,8 @@ export function PipelineShowcase() {
       title="An autonomous film studio, running end to end."
       description="Every stage is a specialised model handing off to the next — you watch it happen live, node by node."
     >
-      <div className="relative overflow-hidden rounded-3xl border border-line/10 bg-surface-1/60 p-6 ring-hairline lg:p-10">
-        <div className="pointer-events-none absolute inset-0 bg-grain" />
+      <div className="relative overflow-hidden rounded-3xl border border-line/8 bg-surface-1 p-6 shadow-lg ring-hairline lg:p-10">
+        <div className="pointer-events-none absolute inset-0 bg-editorial-glow opacity-70" />
 
         <div className="relative grid gap-3 lg:grid-cols-7">
           {PIPELINE_STAGES.map((stage, i) => {
@@ -28,11 +29,11 @@ export function PipelineShowcase() {
                 transition={{ delay: i * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 className="group relative"
               >
-                <div className="flex h-full flex-col rounded-2xl border border-line/8 bg-surface-2/60 p-4 transition-colors hover:border-accent/30">
+                <div className="flex h-full flex-col rounded-2xl border border-line/8 bg-surface-1 p-4 shadow-soft transition-all duration-300 ease-premium hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-lg">
                   <div className="mb-3 flex items-center justify-between">
-                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-surface-3 to-surface-2 text-accent-soft ring-1 ring-inset ring-line/10">
+                    <IconTile size="sm">
                       <Icon className="h-4 w-4" />
-                    </div>
+                    </IconTile>
                     <CheckCircle2 className="h-4 w-4 text-success/70" />
                   </div>
                   <p className="text-sm font-medium text-fg">{stage.label}</p>
@@ -44,8 +45,8 @@ export function PipelineShowcase() {
 
                 {i < PIPELINE_STAGES.length - 1 && (
                   <div className="absolute -right-2.5 top-1/2 z-10 hidden -translate-y-1/2 lg:block">
-                    <div className="grid h-5 w-5 place-items-center rounded-full border border-line/10 bg-bg">
-                      <ArrowRight className="h-3 w-3 text-fg-subtle" />
+                    <div className="grid h-5 w-5 place-items-center rounded-full border border-line/10 bg-surface-1 shadow-soft">
+                      <ArrowRight className="h-3 w-3 text-accent" />
                     </div>
                   </div>
                 )}

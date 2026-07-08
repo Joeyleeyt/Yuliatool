@@ -1,6 +1,7 @@
 import { Wand2, Workflow, Gauge, ShieldCheck, Clapperboard, RefreshCw } from 'lucide-react';
 import { Section } from './section';
 import { Reveal } from '@/components/ui/motion';
+import { IconTile } from '@/components/ui/primitives';
 
 const FEATURES = [
   {
@@ -47,10 +48,10 @@ export function Features() {
           const Icon = f.icon;
           return (
             <Reveal key={f.title} delay={(i % 3) * 0.06}>
-              <div className="h-full bg-surface-1 p-6 transition-colors hover:bg-surface-2">
-                <div className="mb-4 grid h-10 w-10 place-items-center rounded-lg bg-surface-3 text-accent-soft">
+              <div className="h-full bg-surface-1 p-7 transition-colors hover:bg-surface-2">
+                <IconTile className="mb-4">
                   <Icon className="h-5 w-5" />
-                </div>
+                </IconTile>
                 <h3 className="text-[15px] font-medium tracking-tight text-fg">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-fg-muted">{f.body}</p>
               </div>

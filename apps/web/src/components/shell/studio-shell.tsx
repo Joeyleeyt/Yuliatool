@@ -18,8 +18,8 @@ export function StudioShell({
 
   return (
     <div className="relative min-h-screen bg-bg">
-      {/* ambient accent wash at the top of the workspace */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-64 bg-accent-radial opacity-60" />
+      {/* ambient editorial wash at the top of the workspace */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-editorial-glow opacity-70" />
 
       <DesktopSidebar />
 
@@ -28,14 +28,14 @@ export function StudioShell({
         {navOpen && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-40 bg-fg/25 backdrop-blur-sm lg:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setNavOpen(false)}
             />
             <motion.aside
-              className="fixed inset-y-0 left-0 z-50 w-[280px] border-r border-line/10 bg-bg lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-[280px] border-r border-line/8 bg-surface-1 shadow-lg lg:hidden"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}

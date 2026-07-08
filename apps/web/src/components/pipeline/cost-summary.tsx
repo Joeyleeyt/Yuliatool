@@ -2,6 +2,7 @@
 
 import { DollarSign } from 'lucide-react';
 import { useCost } from '@/lib/query/hooks';
+import { IconTile } from '@/components/ui/primitives';
 
 const money = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
@@ -10,12 +11,12 @@ export function CostSummary({ id }: { id: string }) {
   if (!data || data.totalOperations === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-line/8 bg-surface-1/60 p-5 ring-hairline">
+    <div className="rounded-2xl border border-line/8 bg-surface-1 p-5 shadow-soft ring-hairline">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-surface-3 text-accent-soft">
+        <div className="flex items-center gap-2.5">
+          <IconTile size="sm">
             <DollarSign className="h-4 w-4" />
-          </div>
+          </IconTile>
           <span className="text-sm font-medium text-fg">Generation cost</span>
         </div>
         <span className="font-mono text-lg font-medium text-fg">{money(data.totalUsd)}</span>

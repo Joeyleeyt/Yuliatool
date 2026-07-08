@@ -44,11 +44,11 @@ export function SidebarNav({ onNavigate }: { onNavigate?: (() => void) | undefin
             {active && (
               <motion.span
                 layoutId="sidebar-active"
-                className="absolute inset-0 rounded-lg bg-surface-2 ring-1 ring-inset ring-line/10"
+                className="absolute inset-0 rounded-lg bg-accent/[0.08] ring-1 ring-inset ring-accent/15"
                 transition={{ type: 'spring', stiffness: 400, damping: 34 }}
               />
             )}
-            <Icon className={cn('relative z-10 h-4 w-4 shrink-0', active && 'text-accent-soft')} />
+            <Icon className={cn('relative z-10 h-4 w-4 shrink-0', active && 'text-accent')} />
             <span className="relative z-10 flex-1">{item.label}</span>
           </Link>
         );

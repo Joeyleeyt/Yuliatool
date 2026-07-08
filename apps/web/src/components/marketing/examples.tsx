@@ -31,7 +31,7 @@ export function Examples() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="group cursor-pointer overflow-hidden rounded-2xl border border-line/8 bg-surface-1 ring-hairline transition-all hover:border-line/16 hover:shadow-lg"
+            className="group cursor-pointer overflow-hidden rounded-2xl border border-line/8 bg-surface-1 shadow-soft ring-hairline transition-all duration-300 ease-premium hover:-translate-y-1 hover:border-line/16 hover:shadow-lg"
           >
             <div className={`relative aspect-video overflow-hidden bg-gradient-to-br ${GRADIENTS[i]}`}>
               <div className="absolute inset-0 bg-grain" />

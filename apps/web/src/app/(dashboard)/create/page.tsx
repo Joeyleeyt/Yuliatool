@@ -27,8 +27,9 @@ export default function CreatePage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col items-center py-10 text-center">
-      <FadeUp className="flex flex-col items-center">
+    <div className="relative mx-auto flex max-w-xl flex-col items-center py-10 text-center">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-editorial-glow" />
+      <FadeUp className="relative flex flex-col items-center">
         <div className="mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-accent-soft to-accent shadow-glow">
           <Sparkles className="h-6 w-6 text-white" />
         </div>

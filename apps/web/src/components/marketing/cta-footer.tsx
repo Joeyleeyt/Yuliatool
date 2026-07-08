@@ -8,8 +8,8 @@ export function CtaFooter() {
   return (
     <>
       <section className="relative mx-auto max-w-6xl px-4 py-24 lg:px-8">
-        <Reveal className="relative overflow-hidden rounded-3xl border border-line/10 bg-surface-1 px-6 py-20 text-center ring-hairline">
-          <div className="pointer-events-none absolute inset-0 bg-accent-radial opacity-80" />
+        <Reveal className="relative overflow-hidden rounded-3xl border border-line/8 bg-surface-1 px-6 py-20 text-center shadow-lg ring-hairline">
+          <div className="pointer-events-none absolute inset-0 bg-editorial-glow" />
           <div className="pointer-events-none absolute inset-0 bg-grain" />
           <div className="relative mx-auto max-w-2xl">
             <h2 className="text-balance text-4xl font-semibold tracking-tightest text-fg sm:text-5xl">

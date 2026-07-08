@@ -3,16 +3,17 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Play, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/primitives';
+import { Button, IconTile } from '@/components/ui/primitives';
 import { fadeUp, stagger } from '@/components/ui/motion';
 import { PIPELINE_STAGES } from '@/components/pipeline/stages';
 
 export function Hero() {
   return (
     <section className="relative overflow-hidden px-4 pb-24 pt-40 lg:px-8">
-      {/* ambient cinematic wash */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[640px] bg-accent-radial" />
-      <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-accent/10 blur-[140px]" />
+      {/* ambient editorial wash — violet ↔ blue */}
+      <div className="pointer-events-none absolute inset-0 bg-editorial-glow" />
+      <div className="pointer-events-none absolute left-[15%] top-24 h-[380px] w-[560px] rounded-full bg-accent/[0.12] blur-[150px]" />
+      <div className="pointer-events-none absolute right-[12%] top-40 h-[320px] w-[480px] rounded-full bg-accent-2/[0.12] blur-[150px]" />
 
       <motion.div
         variants={stagger(0.09)}
@@ -21,8 +22,8 @@ export function Hero() {
         className="relative mx-auto flex max-w-3xl flex-col items-center text-center"
       >
         <motion.div variants={fadeUp}>
-          <span className="inline-flex items-center gap-2 rounded-full border border-line/10 bg-surface-1/60 px-3 py-1 text-xs text-fg-muted backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-accent-soft" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-line/10 bg-surface-1/80 px-3.5 py-1.5 text-xs font-medium text-fg-muted shadow-soft backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-accent" />
             Your AI Film Director
           </span>
         </motion.div>
@@ -67,19 +68,20 @@ export function Hero() {
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         className="relative mx-auto mt-16 max-w-5xl"
       >
-        <div className="glass overflow-hidden rounded-2xl border border-line/10 p-4 shadow-lg ring-hairline">
+        <div className="glass overflow-hidden rounded-2xl border border-line/8 p-4 shadow-lg ring-hairline">
           <div className="flex items-stretch gap-2 overflow-x-auto">
             {PIPELINE_STAGES.map((stage, i) => {
               const Icon = stage.icon;
               return (
                 <div key={stage.key} className="flex min-w-[132px] flex-1 items-center gap-2">
-                  <div className="flex-1 rounded-xl border border-line/8 bg-surface-1/70 p-3">
+                  <div className="flex-1 rounded-xl border border-line/8 bg-surface-1 p-3 shadow-soft">
                     <motion.div
-                      className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-surface-3 text-accent-soft"
-                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      animate={{ opacity: [0.6, 1, 0.6] }}
                       transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.28 }}
                     >
-                      <Icon className="h-4 w-4" />
+                      <IconTile size="sm" className="mb-2.5">
+                        <Icon className="h-4 w-4" />
+                      </IconTile>
                     </motion.div>
                     <p className="text-xs font-medium text-fg">{stage.label}</p>
                     <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-subtle">

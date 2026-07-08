@@ -56,7 +56,10 @@ export function PipelineFlow({ id, createdAt }: { id: string; createdAt?: string
   };
 
   return (
-    <div className="rounded-2xl border border-line/8 bg-surface-1/60 p-6 ring-hairline">
+    <div className="relative overflow-hidden rounded-2xl border border-line/8 bg-surface-1 p-6 shadow-soft ring-hairline">
+      {running && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-editorial-glow opacity-70" />
+      )}
       {/* Header */}
       <div className="mb-6 flex items-center gap-5">
         <ProgressIndicator

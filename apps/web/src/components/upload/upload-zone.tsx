@@ -4,7 +4,8 @@ import { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AudioLines, UploadCloud, Sparkles, X } from 'lucide-react';
 import { useUploadVoiceover } from '@/lib/query/hooks';
-import { Button, Spinner } from '@/components/ui/primitives';
+import { Button, IconTile, Spinner } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/toast';
 import { formatBytes } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,7 @@ const ACCEPT = ['mp3', 'wav', 'm4a', 'aac', 'webm', 'ogg'];
 
 export function UploadZone({ projectId }: { projectId: string }) {
   const upload = useUploadVoiceover(projectId);
+  const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -38,11 +40,11 @@ export function UploadZone({ projectId }: { projectId: string }) {
         className={cn(
           'relative cursor-pointer overflow-hidden rounded-3xl border border-dashed p-10 text-center transition-all duration-300',
           dragging
-            ? 'border-accent/60 bg-accent/8 scale-[1.01]'
-            : 'border-line/14 bg-surface-1/60 hover:border-line/24',
+            ? 'border-accent/60 bg-accent/[0.06] scale-[1.01] shadow-lg'
+            : 'border-line/14 bg-surface-1 shadow-soft hover:border-accent/30',
         )}
       >
-        <div className="pointer-events-none absolute inset-0 bg-accent-radial opacity-50" />
+        <div className="pointer-events-none absolute inset-0 bg-editorial-glow opacity-70" />
         {dragging && <div className="pointer-events-none absolute inset-0 bg-grain" />}
 
         <input
@@ -64,7 +66,7 @@ export function UploadZone({ projectId }: { projectId: string }) {
             </motion.div>
             <p className="text-lg font-medium tracking-tight text-fg">Drop your voiceover to begin</p>
             <p className="mt-1.5 text-sm text-fg-muted">
-              or <span className="text-accent-soft">browse files</span> — the studio does the rest
+              or <span className="font-medium text-accent">browse files</span> — the studio does the rest
             </p>
             <p className="mt-4 font-mono text-[11px] uppercase tracking-wide text-fg-subtle">
               {ACCEPT.join(' · ')}
@@ -72,10 +74,10 @@ export function UploadZone({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <div className="relative flex flex-col items-center">
-            <div className="mb-5 flex w-full max-w-md items-center gap-3 rounded-xl border border-line/10 bg-surface-2/70 p-3.5 text-left">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-3 text-accent-soft">
+            <div className="mb-5 flex w-full max-w-md items-center gap-3 rounded-xl border border-line/10 bg-surface-1 p-3.5 text-left shadow-soft">
+              <IconTile size="sm">
                 <AudioLines className="h-5 w-5" />
-              </div>
+              </IconTile>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-fg">{file.name}</p>
                 <p className="text-xs text-fg-subtle">{formatBytes(file.size)}</p>
@@ -101,7 +103,11 @@ export function UploadZone({ projectId }: { projectId: string }) {
               disabled={upload.isPending}
               onClick={(e) => {
                 e.stopPropagation();
-                upload.mutate(file);
+                upload.mutate(file, {
+                  onSuccess: () =>
+                    toast.success('Your AI studio is at work', 'Transcribing the voiceover and planning the film.'),
+                  onError: (err) => toast.error('Upload failed', (err as Error).message),
+                });
               }}
             >
               {upload.isPending ? (

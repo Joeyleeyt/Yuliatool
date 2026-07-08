@@ -41,7 +41,7 @@ export function ProjectCard({ project }: { project: ProjectRow }) {
       <motion.article
         whileHover={{ y: -4 }}
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        className="group h-full overflow-hidden rounded-2xl border border-line/8 bg-surface-1 ring-hairline transition-colors hover:border-line/16 hover:shadow-lg"
+        className="group h-full overflow-hidden rounded-2xl border border-line/8 bg-surface-1 shadow-soft ring-hairline transition-colors hover:border-line/16 hover:shadow-lg"
       >
         {/* Thumbnail */}
         <div className="relative aspect-video overflow-hidden">
@@ -50,26 +50,26 @@ export function ProjectCard({ project }: { project: ProjectRow }) {
 
           <div className="absolute inset-0 grid place-items-center">
             {done ? (
-              <div className="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-black/30 backdrop-blur transition-transform duration-300 ease-premium group-hover:scale-110">
-                <Play className="h-5 w-5 translate-x-0.5 text-white" />
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-surface-1/90 shadow-soft ring-1 ring-inset ring-line/10 backdrop-blur transition-transform duration-300 ease-premium group-hover:scale-110">
+                <Play className="h-5 w-5 translate-x-0.5 text-accent" />
               </div>
             ) : active ? (
-              <Loader2 className="h-7 w-7 animate-spin text-white/70" />
+              <Loader2 className="h-7 w-7 animate-spin text-accent" />
             ) : (
-              <Film className="h-7 w-7 text-white/40" />
+              <Film className="h-7 w-7 text-fg-subtle" />
             )}
           </div>
 
           <div className="absolute left-3 top-3">
             <StatusBadge status={project.status} />
           </div>
-          <div className="absolute bottom-3 right-3 rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/80 backdrop-blur">
+          <div className="absolute bottom-3 right-3 rounded-md bg-surface-1/85 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-muted ring-1 ring-inset ring-line/10 backdrop-blur">
             {vertical ? '9:16' : '16:9'}
           </div>
 
           {/* live progress on the thumbnail base */}
           {active && (
-            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-black/30">
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-line/15">
               <div
                 className="h-full bg-gradient-to-r from-accent-soft to-accent transition-[width] duration-700"
                 style={{ width: `${Math.max(6, pct)}%` }}

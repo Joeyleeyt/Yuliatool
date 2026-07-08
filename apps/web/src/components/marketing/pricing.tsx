@@ -54,10 +54,10 @@ export function Pricing() {
           <Reveal key={plan.name} delay={i * 0.08} className="h-full">
             <div
               className={cn(
-                'relative flex h-full flex-col rounded-2xl border p-6 ring-hairline',
+                'relative flex h-full flex-col rounded-2xl border p-7 ring-hairline transition-all duration-300 ease-premium hover:-translate-y-1',
                 plan.featured
                   ? 'border-accent/40 bg-surface-1 shadow-glow'
-                  : 'border-line/8 bg-surface-1',
+                  : 'border-line/8 bg-surface-1 shadow-soft hover:shadow-lg',
               )}
             >
               {plan.featured && (
@@ -75,7 +75,7 @@ export function Pricing() {
               <ul className="mt-6 flex flex-1 flex-col gap-3">
                 {plan.features.map((feat) => (
                   <li key={feat} className="flex items-start gap-2.5 text-sm text-fg-muted">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent-soft" />
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     {feat}
                   </li>
                 ))}
