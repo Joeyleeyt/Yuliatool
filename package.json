@@ -19,9 +19,12 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:migrate": "supabase db push",
     "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local > packages/db/src/generated/database.types.ts"
+    "db:types": "supabase gen types typescript --local > packages/db/src/generated/database.types.ts",
+    "r2:cors": "node --env-file=.env scripts/r2-cors.mjs",
+    "r2:cors:print": "node --env-file=.env scripts/r2-cors.mjs --print"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.717.0",
     "@types/node": "^22.10.0",
     "prettier": "^3.4.2",
     "rimraf": "^6.0.1",
