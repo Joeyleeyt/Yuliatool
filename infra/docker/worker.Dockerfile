@@ -21,8 +21,18 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Re-link the workspace: the deps stage only carries the root node_modules (+ the
+# .pnpm store); pnpm's isolated layout keeps each package's deps under
+# packages/*/node_modules, which aren't copied. Re-running install (offline, from
+# the store) recreates those per-package symlinks so tsc can resolve deps.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prefer-offline
 RUN pnpm --filter @yulia/worker... build && \
     pnpm --filter @yulia/worker deploy --prod /app/deploy
+# The @yulia/* packages export TS source (./src/*.ts) for tsx-based dev. Production
+# runs plain `node`, so repoint each deployed package's exports at its compiled
+# ./dist/*.js (pnpm ships dist but doesn't apply publishConfig on deploy).
+RUN node infra/docker/fix-workspace-exports.mjs /app/deploy
 
 # --- runtime: slim node + ffmpeg -------------------------------------------
 FROM node:22-slim AS runner

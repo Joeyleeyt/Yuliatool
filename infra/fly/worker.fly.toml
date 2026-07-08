@@ -1,7 +1,9 @@
 # Fly.io — background worker (BullMQ consumers: transcription, AI, generation,
 # downloads, rendering). Runs FFmpeg, so it needs CPU, memory, and disk.
 app = "yulia-video-worker"
-primary_region = "iad"
+# Co-located with the Supabase Postgres (AWS eu-west-1 / Ireland) to avoid a
+# cross-Atlantic hop on every query; Redis is provisioned in the same region.
+primary_region = "lhr"
 
 [build]
   dockerfile = "../docker/worker.Dockerfile"

@@ -1,0 +1,22 @@
+# Build context hygiene: keep the remote builder upload small and never bake
+# secrets or local install artifacts into image layers.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+.git
+.github
+.vscode
+.claude
+
+# Secrets / local env — MUST never enter the image.
+.env
+.env.*
+!.env.example
+
+# Local/editor noise
+*.log
+npm-debug.log*
+.DS_Store
+coverage
