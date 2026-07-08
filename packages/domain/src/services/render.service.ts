@@ -72,6 +72,10 @@ export class RenderService {
       });
 
       // Download voiceover + each scene asset locally.
+      this.ctx.logger.info(
+        { projectId, renderId, scenes: scenes.length },
+        'render: downloading voiceover + scene assets',
+      );
       const voicePath = join(workDir, 'voiceover');
       await this.download(voiceover.r2_key, voicePath);
 
@@ -79,6 +83,10 @@ export class RenderService {
 
       await this.ctx.repos.renders.update(renderId, { status: 'normalizing', progress: 10 });
 
+      this.ctx.logger.info(
+        { projectId, renderId, segments: segments.length, width, height },
+        'render: encoding video (ffmpeg)',
+      );
       const outputPath = join(workDir, 'final.mp4');
       let lastPersisted = 10;
       const result = await renderVideo({
@@ -105,6 +113,10 @@ export class RenderService {
       await this.ctx.repos.renders.update(renderId, { status: 'uploading', progress: 92 });
       const renderKey = R2_PREFIX.render(projectId, renderId);
       const { size } = await stat(outputPath);
+      this.ctx.logger.info(
+        { projectId, renderId, bytes: size, durationSec: result.durationSec },
+        'render: uploading final MP4 to R2',
+      );
       await this.ctx.storage.putObject(renderKey, createReadStream(outputPath), {
         contentType: 'video/mp4',
         contentLength: size,

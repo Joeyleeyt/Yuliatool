@@ -54,6 +54,7 @@ export class TranscriptionService {
       SIGNED_URL_TTL.downloadSec,
     );
 
+    this.ctx.logger.info({ projectId, assetId: voiceover.id }, 'transcribing voiceover (deepgram)');
     const startedAt = Date.now();
     const result = await this.stt.transcribeUrl(url);
     const durationMs = Date.now() - startedAt;

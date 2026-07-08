@@ -86,6 +86,7 @@ export class SceneGenerationService {
       let externalId = asset.external_id;
 
       if (!externalId) {
+        this.ctx.logger.info({ projectId, sceneId, kind }, 'submitting scene to 69labs');
         const submission = await gen.submit(this.buildRequest(kind, prompt.positive_prompt, prompt.negative_prompt, prompt.parameters, sceneId, projectId));
         externalId = submission.externalId;
         await this.ctx.repos.assets.setSubmitted(asset.id, {
@@ -96,6 +97,7 @@ export class SceneGenerationService {
         await this.record(projectId, sceneId, asset.id, 'submit', externalId, 'submitted', null, null);
       }
 
+      this.ctx.logger.info({ projectId, sceneId, kind, externalId }, 'awaiting 69labs generation');
       const result = await this.pollUntilTerminal(gen, externalId);
 
       if (result.status === 'failed') {
@@ -147,8 +149,11 @@ export class SceneGenerationService {
     externalId: string,
   ): Promise<GenerationResult> {
     const deadline = Date.now() + env.GENERATION_POLL_TIMEOUT_SEC * 1000;
+    let polls = 0;
     for (;;) {
       const result = await gen.poll(externalId);
+      polls += 1;
+      this.ctx.logger.debug({ externalId, poll: polls, status: result.status }, 'polled 69labs');
       if (result.status === 'completed' || result.status === 'failed') return result;
       if (Date.now() > deadline) {
         // Timeout is retryable: the next attempt reconciles this same external_id.

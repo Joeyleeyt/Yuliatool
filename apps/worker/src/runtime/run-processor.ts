@@ -37,6 +37,11 @@ export function defineProcessor<Q extends QueueName>(
 
     await ctx.jobs.markActive(key, job.id ?? null);
     const startedAt = Date.now();
+    const ids = payload as { projectId?: string; sceneId?: string };
+    log.info(
+      { jobId: key, attempt: job.attemptsMade + 1, projectId: ids.projectId, sceneId: ids.sceneId },
+      'job started',
+    );
 
     try {
       await handler(payload, ctx);

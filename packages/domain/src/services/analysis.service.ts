@@ -64,6 +64,7 @@ export class AnalysisService {
     if (units.length === 0) throw new ValidationError('Transcript produced no units', { projectId });
 
     // --- Stage 1: global analysis ---
+    this.ctx.logger.info({ projectId, units: units.length }, 'analyzing transcript (openai)');
     const analysis = await this.ai.complete({
       schema: AnalysisSchema,
       schemaName: 'analysis',
@@ -90,6 +91,7 @@ export class AnalysisService {
     }
 
     // --- Stage 2: segmentation ---
+    this.ctx.logger.info({ projectId }, 'segmenting transcript into scenes (openai)');
     const segmentation = await this.ai.complete({
       schema: SegmentationSchema,
       schemaName: 'segmentation',

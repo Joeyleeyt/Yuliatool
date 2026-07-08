@@ -60,10 +60,17 @@ export class PromptGenerationService {
 
     let previous: { title: string; positivePrompt: string } | null = null;
 
+    this.ctx.logger.info({ projectId, scenes: scenes.length }, 'generating scene prompts (openai)');
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]!;
       const next = scenes[i + 1] ?? null;
       const brief = (scene.visual_brief ?? {}) as Record<string, unknown>;
+
+      this.ctx.logger.info(
+        { projectId, sceneId: scene.id, scene: i + 1, total: scenes.length, visualType: scene.visual_type },
+        'prompting scene',
+      );
 
       const result: StructuredResult<ScenePromptOutput> = await this.ai.complete<ScenePromptOutput>({
         schema: ScenePromptSchema,

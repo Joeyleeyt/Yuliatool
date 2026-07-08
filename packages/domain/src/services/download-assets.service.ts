@@ -67,6 +67,7 @@ export class DownloadAssetsService {
     await this.ctx.repos.assets.updateStatus(asset.id, 'downloading');
     await this.ctx.repos.scenes.updateStatus(sceneId, 'downloading');
 
+    this.ctx.logger.info({ projectId, sceneId, kind: assetKind }, 'downloading generated asset into R2');
     const gen = isVideo ? this.gens.video : this.gens.image;
     const stream = await gen.download({
       externalId: asset.external_id ?? '',
