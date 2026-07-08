@@ -3,10 +3,13 @@
   "globalDependencies": [".env", ".env.example", "tsconfig.base.json"],
   "globalEnv": [
     "NODE_ENV",
+    "LOG_LEVEL",
     "DATABASE_URL",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "REDIS_URL",
     "R2_ACCOUNT_ID",
     "R2_ACCESS_KEY_ID",
@@ -14,9 +17,13 @@
     "R2_BUCKET",
     "R2_PUBLIC_BASE_URL",
     "OPENAI_API_KEY",
+    "OPENAI_MODEL",
     "DEEPGRAM_API_KEY",
+    "DEEPGRAM_MODEL",
     "SIXTYNINE_LABS_API_KEY",
-    "SIXTYNINE_LABS_BASE_URL"
+    "SIXTYNINE_LABS_BASE_URL",
+    "WORKER_CONCURRENCY",
+    "GENERATION_POLL_TIMEOUT_SEC"
   ],
   "tasks": {
     "build": {
