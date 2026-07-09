@@ -31,7 +31,10 @@ export interface AssetView extends AssetRow {
 
 export interface RenderView {
   render: RenderRow | null;
+  /** Inline URL for the <video> player. */
   url: string | null;
+  /** Attachment URL for the "Download MP4" button (forces a save). */
+  downloadUrl: string | null;
 }
 
 export interface CostView {
@@ -128,15 +131,20 @@ export class ProjectReadService {
   }
 
   async render(projectId: string, ownerId: string): Promise<RenderView> {
-    await this.projects.get(projectId, ownerId);
+    const project = await this.projects.get(projectId, ownerId);
     const render = await this.ctx.repos.renders.findLatestByProject(projectId);
-    if (!render?.asset_id) return { render, url: null };
+    if (!render?.asset_id) return { render, url: null, downloadUrl: null };
     const asset = await this.ctx.repos.assets.findById(render.asset_id);
-    const url =
-      asset?.r2_key != null
-        ? await this.ctx.storage.createSignedDownloadUrl(asset.r2_key, SIGNED_URL_TTL.downloadSec)
-        : null;
-    return { render, url };
+    if (asset?.r2_key == null) return { render, url: null, downloadUrl: null };
+
+    const filename = `${project.title ?? 'video'}.mp4`;
+    const [url, downloadUrl] = await Promise.all([
+      this.ctx.storage.createSignedDownloadUrl(asset.r2_key, SIGNED_URL_TTL.downloadSec),
+      this.ctx.storage.createSignedDownloadUrl(asset.r2_key, SIGNED_URL_TTL.downloadSec, {
+        downloadFilename: filename,
+      }),
+    ]);
+    return { render, url, downloadUrl };
   }
 }
 

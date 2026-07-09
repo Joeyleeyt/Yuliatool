@@ -1,11 +1,10 @@
 import {
   ProjectStatus,
   QueueName,
-  SceneVisualType,
   NotFoundError,
   ValidationError,
   ScenePromptSchema,
-  SEGMENT_DURATION,
+  PIP_LAYOUT,
   env,
   type ScenePromptOutput,
 } from '@yulia/core';
@@ -13,13 +12,7 @@ import type { Json, SceneRow } from '@yulia/db';
 import { OpenAIService, type StructuredResult } from '@yulia/services';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
-import {
-  seedFrom,
-  scenePromptSystem,
-  scenePromptUser,
-  mergeNegativePrompt,
-  aspectRatioFor,
-} from '../ai/index.js';
+import { seedFrom, scenePromptSystem, scenePromptUser, mergeNegativePrompt } from '../ai/index.js';
 
 /**
  * PROMPT_GENERATION stage. Generates one cinematic 69Labs prompt per scene,
@@ -100,10 +93,14 @@ export class PromptGenerationService {
       });
 
       const negative = mergeNegativePrompt(result.data.negativePrompt);
+      // Store both PiP layers in one prompt row: the background lives in the
+      // top-level positive/negative fields; the overlay prompt + its aspect
+      // ratio ride in `parameters` (consumed by the two-layer generation stage).
       const parameters: Json = {
-        visualType: scene.visual_type,
-        aspectRatio: aspectRatioFor(project.render_format),
-        durationSec: SEGMENT_DURATION[scene.visual_type],
+        backgroundAspectRatio: PIP_LAYOUT.backgroundAspectRatio,
+        overlayAspectRatio: PIP_LAYOUT.overlayAspectRatio,
+        overlayPrompt: result.data.overlayPrompt,
+        overlayNegativePrompt: mergeNegativePrompt(result.data.overlayNegativePrompt),
         camera: result.data.camera,
         composition: result.data.composition,
         lighting: result.data.lighting,
@@ -138,15 +135,15 @@ export class PromptGenerationService {
     this.ctx.logger.info({ projectId, prompts: scenes.length }, 'prompt generation complete');
   }
 
-  /** Dispatch one generation job per scene by visual type (consumed in Phase 5). */
+  /**
+   * Dispatch one generation job per scene. Each scene is a two-layer composite,
+   * so a single VIDEO_GENERATION job drives BOTH the background video and the
+   * overlay image (see SceneGenerationService) — no separate image fan-out.
+   */
   private async fanOutGeneration(projectId: string, scenes: SceneRow[]): Promise<void> {
     for (const scene of scenes) {
-      const queue =
-        scene.visual_type === SceneVisualType.VIDEO
-          ? QueueName.VIDEO_GENERATION
-          : QueueName.IMAGE_GENERATION;
       await this.ctx.jobs.dispatch(
-        queue,
+        QueueName.VIDEO_GENERATION,
         { projectId, sceneId: scene.id },
         { projectId, sceneId: scene.id },
       );

@@ -6,5 +6,8 @@ export async function imageGenerationHandler(
   payload: QueuePayloadMap[typeof QueueName.IMAGE_GENERATION],
   ctx: AppContext,
 ): Promise<void> {
-  await new SceneGenerationService(ctx).run(payload.projectId, payload.sceneId, 'image');
+  // Scenes now fan out only to VIDEO_GENERATION (which drives both layers).
+  // Kept for backward-compat with any in-flight IMAGE_GENERATION jobs; run() is
+  // idempotent, so re-driving the scene is safe.
+  await new SceneGenerationService(ctx).run(payload.projectId, payload.sceneId);
 }

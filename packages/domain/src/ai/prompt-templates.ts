@@ -56,17 +56,22 @@ export function segmentationUser(units: TranscriptUnit[], styleGuideJson: string
 }
 
 // --- Stage 3: per-scene cinematic prompt ------------------------------------
-export function scenePromptSystem(visualType: SceneVisualType): string {
-  const kind =
-    visualType === 'video'
-      ? `an 8-second cinematic VIDEO clip — emphasize camera movement, subtle motion, and life ` +
-        `(dolly, gentle push-in, parallax, flowing fabric, drifting light)`
-      : `a 5-second still IMAGE — emphasize impeccable composition, beauty, fine detail, and ` +
-        `editorial magazine quality`;
+// A scene is a picture-in-picture composite: a wide cinematic BACKGROUND video
+// plus a portrait OVERLAY "window" (detail/product shot) over it. We prompt for
+// both layers at once so they read as one art-directed frame. `visualType` is
+// retained for signature compatibility but no longer selects a single medium.
+export function scenePromptSystem(_visualType: SceneVisualType): string {
   return (
-    `You are a prompt engineer for the 69Labs generative model, crafting ${kind}. ` +
-    `${HOUSE_STYLE.descriptor} Produce an extremely cinematic, richly detailed, coherent prompt. ` +
-    `Respond ONLY with the structured JSON.`
+    `You are a prompt engineer for the 69Labs generative model, art-directing a ` +
+    `picture-in-picture luxury shot. ${HOUSE_STYLE.descriptor} You craft TWO complementary ` +
+    `prompts per scene:\n` +
+    `1) BACKGROUND — a wide, 16:9, ~8-second cinematic lifestyle/establishing VIDEO clip with ` +
+    `gentle motion (dolly, push-in, parallax, drifting light, flowing fabric).\n` +
+    `2) OVERLAY — a 4:5 portrait still IMAGE: a tight detail or product shot (texture, hands, ` +
+    `object, fabric, grooming) that lives in the SAME world, wardrobe, and color grade as the ` +
+    `background but with tighter, editorial framing.\n` +
+    `The two must never contradict each other. Produce extremely cinematic, richly detailed ` +
+    `prompts. Respond ONLY with the structured JSON.`
   );
 }
 
@@ -112,9 +117,12 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `Mood: ${c.current.mood}\n` +
     `Continuity notes: ${c.current.continuityNotes}\n\n` +
     `${prev}\n${next}\n\n` +
-    `Write the positivePrompt (one dense cinematic paragraph), a negativePrompt, and the ` +
-    `camera, composition, lighting, motion, and colorPalette fields. Keep the elegant, ` +
-    `high-end, soft-luxury editorial aesthetic throughout.`
+    `Write, for the BACKGROUND video: positivePrompt (one dense cinematic paragraph), ` +
+    `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
+    `Then, for the OVERLAY window: overlayPrompt (a portrait 4:5 detail/product still in the ` +
+    `same world and grade — tighter framing, a complementary subject, not a repeat of the ` +
+    `background) and overlayNegativePrompt. Keep the elegant, high-end, soft-luxury editorial ` +
+    `aesthetic throughout.`
   );
 }
 

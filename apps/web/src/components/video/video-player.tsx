@@ -60,7 +60,7 @@ export function VideoPlayer({ id, title }: { id: string; title?: string }) {
 
         <div className="flex items-center gap-2">
           {ready && (
-            <a href={data.url!} download>
+            <a href={data.downloadUrl ?? data.url!} download>
               <Button size="sm">
                 <Download className="h-3.5 w-3.5" />
                 Download MP4

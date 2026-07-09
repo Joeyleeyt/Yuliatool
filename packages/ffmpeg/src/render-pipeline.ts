@@ -1,15 +1,16 @@
 import { join } from 'node:path';
 import { RENDER_ENCODING, TRANSITION, RenderError } from '@yulia/core';
 import { ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
-import { normalizeVideoSegment, normalizeImageSegment } from './normalize.js';
+import { compositeScene } from './normalize.js';
 import { probe } from './ffprobe.js';
 import type { RenderInput, RenderOutput } from './types.js';
 
 /**
- * Full render: normalize each segment, crossfade-chain them into a silent video
- * whose length equals the narration, then mux the original voiceover.
+ * Full render: composite each scene (background video + portrait overlay
+ * window), crossfade-chain them into a silent video whose length equals the
+ * narration, then mux the original voiceover.
  *
- * Sync guarantee: non-last segments are normalized to `displayDuration + T` and
+ * Sync guarantee: non-last segments are composited to `displayDuration + T` and
  * xfade offsets are the cumulative display durations, so the crossfades overlap
  * exactly the added `T` and the total equals Σ displayDuration.
  */
@@ -20,17 +21,20 @@ export async function renderVideo(input: RenderInput): Promise<RenderOutput> {
   const N = segments.length;
   if (N === 0) throw new RenderError('no segments to render');
 
-  // 1. Normalize each segment.
+  // 1. Composite each scene's two layers into one normalized clip.
   const normalized: string[] = [];
   for (let i = 0; i < N; i++) {
     const seg = segments[i]!;
     const isLast = i === N - 1;
     const targetLen = isLast ? seg.displayDurationSec : seg.displayDurationSec + T;
-    const out = join(workDir, `norm_${String(i).padStart(4, '0')}.mp4`);
+    const out = join(workDir, `scene_${String(i).padStart(4, '0')}.mp4`);
 
-    const opts = { width, height, fps, durationSec: targetLen };
-    if (seg.type === 'video') await normalizeVideoSegment(seg.path, out, opts);
-    else await normalizeImageSegment(seg.path, out, opts);
+    await compositeScene(seg.backgroundPath, seg.overlayPath, seg.overlaySide, out, {
+      width,
+      height,
+      fps,
+      durationSec: targetLen,
+    });
 
     normalized.push(out);
     input.onProgress?.({ percent: Math.round(((i + 1) / N) * 70), stage: 'normalize' });

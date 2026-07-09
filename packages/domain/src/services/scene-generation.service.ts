@@ -2,14 +2,14 @@ import {
   AssetKind,
   ProjectStatus,
   QueueName,
-  SceneVisualType,
   GENERATION_POLL_INTERVAL_SEC,
+  PIP_LAYOUT,
   NotFoundError,
   ValidationError,
   ExternalServiceError,
   env,
 } from '@yulia/core';
-import type { Json } from '@yulia/db';
+import type { Json, PromptRow } from '@yulia/db';
 import {
   VideoGenerationService,
   ImageGenerationService,
@@ -29,11 +29,16 @@ const CONTENT_TYPE: Record<GenerationKind, string> = {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Per-scene generation (video or image). Resumable + idempotent:
- *   - already stored -> no-op
- *   - has external_id -> reconcile by polling (no resubmit, no double-spend)
- *   - provider failure -> reset + retryable throw (BullMQ resubmits next attempt)
- * On success it marks the asset `generated` and dispatches the download stage.
+ * Per-scene generation for the picture-in-picture composite. Every scene has
+ * TWO layers, produced by a single job:
+ *   - background: a wide 16:9 VIDEO clip (kind 'video' -> VIDEO_CLIP asset)
+ *   - overlay:    a portrait 4:5 IMAGE  (kind 'image' -> IMAGE asset)
+ *
+ * Resumable + idempotent per layer:
+ *   - a layer already stored/generated -> skip (no double-spend)
+ *   - a layer with an external_id -> reconcile by polling (no resubmit)
+ *   - provider failure -> reset that layer + retryable throw (BullMQ resubmits)
+ * Once BOTH layers are generated it dispatches the download stage.
  */
 export class SceneGenerationService {
   private readonly gens: Record<GenerationKind, GenerationService>;
@@ -48,7 +53,7 @@ export class SceneGenerationService {
     };
   }
 
-  async run(projectId: string, sceneId: string, kind: GenerationKind): Promise<void> {
+  async run(projectId: string, sceneId: string): Promise<void> {
     const project = await this.ctx.repos.projects.findById(projectId);
     if (!project) throw new NotFoundError('Project', projectId);
     if (
@@ -62,13 +67,32 @@ export class SceneGenerationService {
     const scene = await this.ctx.repos.scenes.findById(sceneId);
     if (!scene || scene.project_id !== projectId) throw new NotFoundError('Scene', sceneId);
 
-    const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-    let asset = await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
-    if (asset?.status === 'stored') return; // already fully done
-
     const prompt = await this.ctx.repos.prompts.getActiveByScene(sceneId);
     if (!prompt) throw new ValidationError('No active prompt for scene', { sceneId });
 
+    // Generate both layers (background video first, then overlay image). Each is
+    // independently idempotent, so a retry only re-runs the layer that failed.
+    await this.runLayer(projectId, sceneId, 'video', this.backgroundRequest(projectId, sceneId, prompt));
+    await this.runLayer(projectId, sceneId, 'image', this.overlayRequest(projectId, sceneId, prompt));
+
+    await this.ctx.jobs.dispatch(
+      QueueName.DOWNLOAD_ASSETS,
+      { projectId, sceneId },
+      { projectId, sceneId },
+    );
+    this.ctx.logger.info({ projectId, sceneId }, 'scene layers generated; download dispatched');
+  }
+
+  /** Ensure one layer's asset reaches `generated` (or is already stored). */
+  private async runLayer(
+    projectId: string,
+    sceneId: string,
+    kind: GenerationKind,
+    req: GenerationRequest,
+  ): Promise<void> {
+    const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
+    let asset = await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
+    if (asset?.status === 'stored') return; // fully done
     if (!asset) {
       asset = await this.ctx.repos.assets.create({
         projectId,
@@ -78,69 +102,63 @@ export class SceneGenerationService {
         contentType: CONTENT_TYPE[kind],
       });
     }
+    if (asset.status === 'generated' && asset.source_url) return; // awaiting download
 
     const gen = this.gens[kind];
+    let externalId = asset.external_id;
 
-    // If not yet generated, submit (unless already submitted) and poll.
-    if (asset.status !== 'generated' || !asset.source_url) {
-      let externalId = asset.external_id;
-
-      if (!externalId) {
-        this.ctx.logger.info({ projectId, sceneId, kind }, 'submitting scene to 69labs');
-        const submission = await gen.submit(this.buildRequest(kind, prompt.positive_prompt, prompt.negative_prompt, prompt.parameters, sceneId, projectId));
-        externalId = submission.externalId;
-        await this.ctx.repos.assets.setSubmitted(asset.id, {
-          provider: 'sixtynine_labs',
-          externalId,
-        });
-        await this.ctx.repos.scenes.updateStatus(sceneId, 'submitted');
-        await this.record(projectId, sceneId, asset.id, 'submit', externalId, 'submitted', null, null);
-      }
-
-      this.ctx.logger.info({ projectId, sceneId, kind, externalId }, 'awaiting 69labs generation');
-      const result = await this.pollUntilTerminal(gen, externalId);
-
-      if (result.status === 'failed') {
-        await this.ctx.repos.assets.clearGeneration(asset.id);
-        await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'failed', null, result.error);
-        throw new ExternalServiceError('69labs', `generation failed: ${result.error ?? 'unknown'}`, {
-          retryable: true,
-        });
-      }
-      if (!result.resultUrl) {
-        throw new ExternalServiceError('69labs', 'completed without result URL', { retryable: true });
-      }
-
-      await this.ctx.repos.assets.setGenerated(asset.id, result.resultUrl);
-      await this.ctx.repos.scenes.updateStatus(sceneId, 'generated');
-      await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'completed', result.costUsd, null);
+    if (!externalId) {
+      this.ctx.logger.info({ projectId, sceneId, kind }, 'submitting layer to 69labs');
+      const submission = await gen.submit(req);
+      externalId = submission.externalId;
+      await this.ctx.repos.assets.setSubmitted(asset.id, {
+        provider: 'sixtynine_labs',
+        externalId,
+      });
+      await this.record(projectId, sceneId, asset.id, 'submit', externalId, 'submitted', null, null);
     }
 
-    await this.ctx.jobs.dispatch(
-      QueueName.DOWNLOAD_ASSETS,
-      { projectId, sceneId },
-      { projectId, sceneId },
-    );
-    this.ctx.logger.info({ projectId, sceneId, kind }, 'scene generated; download dispatched');
+    this.ctx.logger.info({ projectId, sceneId, kind, externalId }, 'awaiting 69labs generation');
+    const result = await this.pollUntilTerminal(gen, externalId);
+
+    if (result.status === 'failed') {
+      await this.ctx.repos.assets.clearGeneration(asset.id);
+      await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'failed', null, result.error);
+      throw new ExternalServiceError('69labs', `generation failed: ${result.error ?? 'unknown'}`, {
+        retryable: true,
+      });
+    }
+    if (!result.resultUrl) {
+      throw new ExternalServiceError('69labs', 'completed without result URL', { retryable: true });
+    }
+
+    await this.ctx.repos.assets.setGenerated(asset.id, result.resultUrl);
+    await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'completed', result.costUsd, null);
   }
 
-  private buildRequest(
-    kind: GenerationKind,
-    positive: string,
-    negative: string | null,
-    parameters: Json,
-    sceneId: string,
-    projectId: string,
-  ): GenerationRequest {
-    const params = (parameters ?? {}) as Record<string, unknown>;
-    const aspectRatio = typeof params.aspectRatio === 'string' ? params.aspectRatio : '9:16';
-    const durationSec = typeof params.durationSec === 'number' ? params.durationSec : undefined;
+  /** Background layer: the scene's primary (positive/negative) prompt, wide 16:9. */
+  private backgroundRequest(projectId: string, sceneId: string, prompt: PromptRow): GenerationRequest {
+    const params = (prompt.parameters ?? {}) as Record<string, unknown>;
     return {
-      prompt: positive,
-      ...(negative ? { negativePrompt: negative } : {}),
-      aspectRatio,
-      ...(kind === 'video' && durationSec !== undefined ? { durationSec } : {}),
-      seed: seedFrom(projectId, sceneId, kind),
+      prompt: prompt.positive_prompt,
+      ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
+      aspectRatio: asString(params.backgroundAspectRatio, PIP_LAYOUT.backgroundAspectRatio),
+      seed: seedFrom(projectId, sceneId, 'video'),
+    };
+  }
+
+  /** Overlay layer: the complementary portrait prompt stored in `parameters`. */
+  private overlayRequest(projectId: string, sceneId: string, prompt: PromptRow): GenerationRequest {
+    const params = (prompt.parameters ?? {}) as Record<string, unknown>;
+    // Fall back to the background prompt for projects prompted before the
+    // two-layer format existed.
+    const overlayPrompt = asString(params.overlayPrompt, prompt.positive_prompt);
+    const overlayNegative = asString(params.overlayNegativePrompt, '');
+    return {
+      prompt: overlayPrompt,
+      ...(overlayNegative ? { negativePrompt: overlayNegative } : {}),
+      aspectRatio: asString(params.overlayAspectRatio, PIP_LAYOUT.overlayAspectRatio),
+      seed: seedFrom(projectId, sceneId, 'image'),
     };
   }
 
@@ -187,8 +205,6 @@ export class SceneGenerationService {
   }
 }
 
-// Referenced only for the union constraint; keeps SceneVisualType imported where
-// callers map scene.visual_type -> GenerationKind.
-export function kindForVisualType(visualType: SceneVisualType): GenerationKind {
-  return visualType === SceneVisualType.VIDEO ? 'video' : 'image';
+function asString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback;
 }

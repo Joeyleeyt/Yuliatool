@@ -47,7 +47,17 @@ const EnvSchema = z.object({
 
   // 69Labs
   SIXTYNINE_LABS_API_KEY: z.string().min(1),
-  SIXTYNINE_LABS_BASE_URL: z.string().url().default('https://api.69labs.ai/v1'),
+  SIXTYNINE_LABS_BASE_URL: z.string().url().default('https://69labs.vip/api/v1'),
+  // Optional model overrides. Unset -> the account's default model is used
+  // (currently Veo 3.1 Lite for video). Some models (e.g. Veo) reject a
+  // `duration` field; only enable SIXTYNINE_LABS_VIDEO_DURATION for a model that
+  // supports it (e.g. grok-imagine-video).
+  SIXTYNINE_LABS_VIDEO_MODEL: z.string().optional(),
+  SIXTYNINE_LABS_IMAGE_MODEL: z.string().optional(),
+  SIXTYNINE_LABS_VIDEO_DURATION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 
   // Worker tuning
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),

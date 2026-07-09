@@ -45,10 +45,48 @@ export const RENDER_ENCODING = {
 /** Default transition applied between segments in the render. */
 export const TRANSITION = {
   type: 'crossfade' as const,
-  durationSec: 0.5,
+  durationSec: 0.8, // longer, softer dissolves between scenes
   // Ken Burns (slow zoom/pan) applied to still images to add life.
-  kenBurnsZoom: 1.08,
+  kenBurnsZoom: 1.12,
+  /**
+   * Cap on how far a short background clip may be slowed (via PTS) to fill its
+   * scene, instead of freezing the last frame. Keeps motion fluid without
+   * extreme, unnatural slow-motion.
+   */
+  maxSlowFactor: 2.5,
 } as const;
+
+/**
+ * Picture-in-picture composite layout — the "Quiet Luxury" format: a wide
+ * cinematic background video with a portrait "window" (a detail/product shot)
+ * floated over it, alternating left/right per scene.
+ *
+ * Fractions are of the render canvas (see RENDER_DIMENSIONS); the renderer
+ * resolves them to pixels. `overlaySide(sceneIndex)` gives the alternating
+ * position so the segmenter and renderer agree without a DB column.
+ */
+export const PIP_LAYOUT = {
+  overlayWidthFrac: 0.35, // 35% of canvas width
+  overlayHeightFrac: 0.7, // 70% of canvas height
+  leftXFrac: 0.1, // left window: x at 10%
+  rightXFrac: 0.55, // right window: x at 55%
+  cornerRadiusPx: 15,
+  shadowOpacity: 0.2, // 20% black drop shadow
+  shadowBlurPx: 24,
+  shadowOffsetPx: 8,
+  fadeInSec: 0.8, // softer window entrance
+  // Aspect ratios requested from 69Labs per layer. Background is the render
+  // orientation (wide); the overlay is a portrait detail/product shot.
+  backgroundAspectRatio: '16:9',
+  overlayAspectRatio: '4:5',
+} as const;
+
+export type OverlaySide = 'left' | 'right';
+
+/** Alternate the overlay window left/right by scene ordinal for visual rhythm. */
+export function overlaySide(sceneIndex: number): OverlaySide {
+  return sceneIndex % 2 === 0 ? 'left' : 'right';
+}
 
 /** Upper bounds to protect cost + queue health. */
 export const LIMITS = {

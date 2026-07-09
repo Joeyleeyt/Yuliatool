@@ -4,7 +4,6 @@ import {
   AssetKind,
   ProjectStatus,
   QueueName,
-  SceneVisualType,
   NotFoundError,
   ValidationError,
   R2_PREFIX,
@@ -48,15 +47,34 @@ export class DownloadAssetsService {
     const scene = await this.ctx.repos.scenes.findById(sceneId);
     if (!scene || scene.project_id !== projectId) throw new NotFoundError('Scene', sceneId);
 
-    const isVideo = scene.visual_type === SceneVisualType.VIDEO;
-    const assetKind = isVideo ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-    const asset = await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
-    if (!asset) throw new NotFoundError('Scene asset', sceneId);
-
-    if (asset.status === 'stored') {
+    if (scene.status === 'stored') {
       await this.fanIn(projectId); // idempotent re-check
       return;
     }
+
+    await this.ctx.repos.scenes.updateStatus(sceneId, 'downloading');
+
+    // Store BOTH composite layers; each is idempotent (skips if already stored).
+    await this.downloadLayer(projectId, sceneId, 'video', scene.duration_sec);
+    await this.downloadLayer(projectId, sceneId, 'image', scene.duration_sec);
+
+    // Scene is complete only once both layers are in R2 -> counts toward fan-in.
+    await this.ctx.repos.scenes.updateStatus(sceneId, 'stored');
+    await this.fanIn(projectId);
+  }
+
+  /** Download one layer's generated result into R2 and mark that asset stored. */
+  private async downloadLayer(
+    projectId: string,
+    sceneId: string,
+    kind: 'video' | 'image',
+    durationSec: number,
+  ): Promise<void> {
+    const isVideo = kind === 'video';
+    const assetKind = isVideo ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
+    const asset = await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
+    if (!asset) throw new NotFoundError(`Scene ${kind} asset`, sceneId);
+    if (asset.status === 'stored') return; // already downloaded on a prior run
     if (!asset.source_url) throw new ValidationError('Asset has no source URL', { assetId: asset.id });
 
     const ext = ASSET_KIND_EXT[assetKind] ?? (isVideo ? 'mp4' : 'png');
@@ -65,11 +83,9 @@ export class DownloadAssetsService {
       : R2_PREFIX.sceneImage(projectId, sceneId, ext);
 
     await this.ctx.repos.assets.updateStatus(asset.id, 'downloading');
-    await this.ctx.repos.scenes.updateStatus(sceneId, 'downloading');
+    this.ctx.logger.info({ projectId, sceneId, kind }, 'downloading generated layer into R2');
 
-    this.ctx.logger.info({ projectId, sceneId, kind: assetKind }, 'downloading generated asset into R2');
-    const gen = isVideo ? this.gens.video : this.gens.image;
-    const stream = await gen.download({
+    const stream = await this.gens[kind].download({
       externalId: asset.external_id ?? '',
       status: 'completed',
       resultUrl: asset.source_url,
@@ -88,9 +104,8 @@ export class DownloadAssetsService {
       contentType,
       sizeBytes: buffer.length,
       checksumSha256: sha256,
-      durationSec: scene.duration_sec,
+      durationSec,
     });
-    await this.ctx.repos.scenes.updateStatus(sceneId, 'stored');
 
     await this.ctx.repos.generationHistory.record({
       projectId,
@@ -101,9 +116,7 @@ export class DownloadAssetsService {
       status: 'stored',
       response: { key, bytes: buffer.length } as unknown as Json,
     });
-
-    this.ctx.logger.info({ projectId, sceneId, key, bytes: buffer.length }, 'asset stored in R2');
-    await this.fanIn(projectId);
+    this.ctx.logger.info({ projectId, sceneId, key, bytes: buffer.length }, 'layer stored in R2');
   }
 
   /**

@@ -11,7 +11,8 @@ const renderFormatSchema = z.enum([
 export const CreateProjectSchema = z.object({
   title: z.string().trim().min(1).max(200).default('Untitled project'),
   description: z.string().trim().max(2000).optional(),
-  renderFormat: renderFormatSchema.default(RenderFormat.VERTICAL_1080x1920),
+  // The picture-in-picture "window" format is a 16:9 landscape composite.
+  renderFormat: renderFormatSchema.default(RenderFormat.HORIZONTAL_1920x1080),
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
 

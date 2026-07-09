@@ -25,6 +25,15 @@ export interface SignedUpload {
   expiresAt: string; // ISO
 }
 
+export interface SignedDownloadOptions {
+  /**
+   * Force the browser to save (not open) the object, under this filename, via a
+   * `Content-Disposition: attachment` response override. Needed because the HTML
+   * `download` attribute is ignored on cross-origin links (a presigned R2 URL).
+   */
+  downloadFilename?: string;
+}
+
 /**
  * Object storage abstraction. The only implementation is R2 (S3-compatible),
  * but the interface keeps callers (domain + workers) provider-agnostic and
@@ -43,7 +52,11 @@ export interface StorageService {
     expiresInSec?: number;
     contentLength?: number;
   }): Promise<SignedUpload>;
-  createSignedDownloadUrl(key: string, expiresInSec?: number): Promise<string>;
+  createSignedDownloadUrl(
+    key: string,
+    expiresInSec?: number,
+    opts?: SignedDownloadOptions,
+  ): Promise<string>;
   /** Public CDN URL if a public base is configured, else null. */
   publicUrl(key: string): string | null;
 }

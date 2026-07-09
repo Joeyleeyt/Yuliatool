@@ -1,6 +1,6 @@
-import { Readable } from 'node:stream';
-import { ExternalServiceError } from '@yulia/core';
-import { SixtyNineLabsClient } from './sixtynine-labs.client.js';
+import type { Readable } from 'node:stream';
+import { env, ExternalServiceError } from '@yulia/core';
+import { SixtyNineLabsClient, type CreateGenerationBody } from './sixtynine-labs.client.js';
 import type {
   GenerationKind,
   GenerationRequest,
@@ -10,29 +10,26 @@ import type {
 } from './types.js';
 
 /**
- * Base 69Labs generation service. Video/image differ only by `kind`. `submit`
- * and `poll` are thin; `download` streams the provider's result URL so callers
- * can pipe it straight to R2.
+ * Base 69Labs generation service. Video/image differ by `kind` (which selects
+ * the /videos or /images endpoints) and by which request fields the provider
+ * accepts (`buildBody`). `submit` and `poll` are thin; `download` streams the
+ * job's output via the provider's authenticated download endpoint.
  */
 abstract class SixtyNineLabsGenerationService implements GenerationService {
   abstract readonly kind: GenerationKind;
 
   constructor(protected readonly client: SixtyNineLabsClient = new SixtyNineLabsClient()) {}
 
+  /** Map our normalized request onto the fields this kind's endpoint accepts. */
+  protected abstract buildBody(req: GenerationRequest): CreateGenerationBody;
+
   async submit(req: GenerationRequest): Promise<GenerationSubmission> {
-    const gen = await this.client.createGeneration({
-      type: this.kind,
-      prompt: req.prompt,
-      ...(req.negativePrompt ? { negative_prompt: req.negativePrompt } : {}),
-      aspect_ratio: req.aspectRatio,
-      ...(req.durationSec !== undefined ? { duration: req.durationSec } : {}),
-      ...(req.seed !== undefined ? { seed: req.seed } : {}),
-    });
+    const gen = await this.client.createGeneration(this.kind, this.buildBody(req));
     return { externalId: gen.id, status: gen.status };
   }
 
   async poll(externalId: string): Promise<GenerationResult> {
-    const gen = await this.client.getGeneration(externalId);
+    const gen = await this.client.getGeneration(this.kind, externalId);
     return {
       externalId: gen.id,
       status: gen.status,
@@ -44,23 +41,41 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
   }
 
   async download(result: GenerationResult): Promise<Readable> {
-    if (!result.resultUrl) {
-      throw new ExternalServiceError('69labs', 'no result URL to download', { retryable: false });
+    if (!result.externalId) {
+      throw new ExternalServiceError('69labs', 'no job id to download', { retryable: false });
     }
-    const res = await fetch(result.resultUrl);
-    if (!res.ok || !res.body) {
-      throw new ExternalServiceError('69labs', `download failed: ${res.status}`, {
-        retryable: res.status >= 500,
-      });
-    }
-    return Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]);
+    return this.client.download(this.kind, result.externalId);
   }
 }
 
 export class VideoGenerationService extends SixtyNineLabsGenerationService {
   readonly kind = 'video' as const;
+
+  protected buildBody(req: GenerationRequest): CreateGenerationBody {
+    return {
+      prompt: req.prompt,
+      aspectRatio: req.aspectRatio,
+      ...(env.SIXTYNINE_LABS_VIDEO_MODEL ? { model: env.SIXTYNINE_LABS_VIDEO_MODEL } : {}),
+      // Duration is off by default: the account's default model (Veo 3.1 Lite)
+      // rejects duration selection. Enable SIXTYNINE_LABS_VIDEO_DURATION only
+      // with a model that supports it. `seed`/negative prompts aren't supported
+      // on video jobs.
+      ...(env.SIXTYNINE_LABS_VIDEO_DURATION && req.durationSec !== undefined
+        ? { duration: String(req.durationSec) }
+        : {}),
+    };
+  }
 }
 
 export class ImageGenerationService extends SixtyNineLabsGenerationService {
   readonly kind = 'image' as const;
+
+  protected buildBody(req: GenerationRequest): CreateGenerationBody {
+    return {
+      prompt: req.prompt,
+      aspectRatio: req.aspectRatio,
+      ...(env.SIXTYNINE_LABS_IMAGE_MODEL ? { model: env.SIXTYNINE_LABS_IMAGE_MODEL } : {}),
+      ...(req.seed !== undefined ? { seed: req.seed } : {}),
+    };
+  }
 }

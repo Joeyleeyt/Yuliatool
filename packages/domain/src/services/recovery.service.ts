@@ -2,11 +2,10 @@ import {
   AssetKind,
   ProjectStatus,
   QueueName,
-  SceneVisualType,
   NotFoundError,
   ValidationError,
 } from '@yulia/core';
-import type { ProjectRow, SceneRow } from '@yulia/db';
+import type { ProjectRow } from '@yulia/db';
 import type { AppContext } from '../context.js';
 
 interface Dispatch {
@@ -142,7 +141,12 @@ export class RecoveryService {
     if (pending.length > 0) {
       return {
         status: ProjectStatus.VIDEO_GENERATION,
-        dispatches: pending.map((scene) => this.generationDispatch(projectId, scene)),
+        // One VIDEO_GENERATION job per scene drives both composite layers.
+        dispatches: pending.map((scene) => ({
+          queue: QueueName.VIDEO_GENERATION,
+          payload: { projectId, sceneId: scene.id },
+          target: { projectId, sceneId: scene.id },
+        })),
       };
     }
 
@@ -161,15 +165,6 @@ export class RecoveryService {
           target: { projectId },
         },
       ],
-    };
-  }
-
-  private generationDispatch(projectId: string, scene: SceneRow): Dispatch {
-    const isVideo = scene.visual_type === SceneVisualType.VIDEO;
-    return {
-      queue: isVideo ? QueueName.VIDEO_GENERATION : QueueName.IMAGE_GENERATION,
-      payload: { projectId, sceneId: scene.id },
-      target: { projectId, sceneId: scene.id },
     };
   }
 }

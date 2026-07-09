@@ -65,7 +65,12 @@ export type SegmentationOutput = z.infer<typeof SegmentationSchema>;
 export type SegmentScene = z.infer<typeof SegmentSceneSchema>;
 
 // --- Per-scene cinematic prompt ---------------------------------------------
+// Each scene is a picture-in-picture composite: a wide cinematic BACKGROUND
+// video plus a portrait OVERLAY "window" (a detail/product shot) floated over
+// it. The model returns both prompts in one call so they stay art-directed as a
+// pair (complementary subject, shared grade), never contradicting each other.
 export const ScenePromptSchema = z.object({
+  // Background: wide lifestyle/establishing video clip (16:9).
   positivePrompt: z.string(),
   negativePrompt: z.string(),
   camera: z.string(),
@@ -73,5 +78,9 @@ export const ScenePromptSchema = z.object({
   lighting: z.string(),
   motion: z.string(),
   colorPalette: z.array(z.string()),
+  // Overlay: portrait detail/product still (4:5) that complements the
+  // background — same world, wardrobe, and grade, tighter framing.
+  overlayPrompt: z.string(),
+  overlayNegativePrompt: z.string(),
 });
 export type ScenePromptOutput = z.infer<typeof ScenePromptSchema>;

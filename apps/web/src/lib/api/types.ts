@@ -39,6 +39,7 @@ export interface AssetView extends AssetRow {
 export interface RenderView {
   render: RenderRow | null;
   url: string | null;
+  downloadUrl: string | null;
 }
 
 export interface UploadTicket {

@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import {
   AssetKind,
   ProjectStatus,
-  SceneVisualType,
+  overlaySide,
   NotFoundError,
   ValidationError,
   R2_PREFIX,
@@ -171,13 +171,18 @@ export class RenderService {
     const segments: RenderSegment[] = [];
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]!;
-      const isVideo = scene.visual_type === SceneVisualType.VIDEO;
-      const assetKind = isVideo ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-      const asset = await this.ctx.repos.assets.findBySceneAndKind(scene.id, assetKind);
-      if (!asset?.r2_key) throw new ValidationError('Scene asset missing', { sceneId: scene.id });
+      const pad = String(i).padStart(4, '0');
 
-      const localPath = join(workDir, `seg_${String(i).padStart(4, '0')}`);
-      await this.download(asset.r2_key, localPath);
+      // Each scene has two layers: a background video + an overlay image.
+      const bg = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP);
+      const overlay = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.IMAGE);
+      if (!bg?.r2_key) throw new ValidationError('Scene background missing', { sceneId: scene.id });
+      if (!overlay?.r2_key) throw new ValidationError('Scene overlay missing', { sceneId: scene.id });
+
+      const backgroundPath = join(workDir, `bg_${pad}`);
+      const overlayPath = join(workDir, `ov_${pad}`);
+      await this.download(bg.r2_key, backgroundPath);
+      await this.download(overlay.r2_key, overlayPath);
 
       // Tile the timeline by scene start times so inter-scene pauses are covered
       // and video length matches the continuous voiceover.
@@ -186,8 +191,9 @@ export class RenderService {
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
       segments.push({
-        path: localPath,
-        type: scene.visual_type,
+        backgroundPath,
+        overlayPath,
+        overlaySide: overlaySide(scene.scene_index),
         displayDurationSec,
       });
     }

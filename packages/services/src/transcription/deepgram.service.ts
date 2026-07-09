@@ -8,6 +8,16 @@ import type {
 } from './types.js';
 
 /**
+ * Hard ceiling on a single Deepgram call. Prerecorded transcription of typical
+ * voiceovers finishes in seconds; anything approaching this means the request is
+ * wedged (e.g. Deepgram can't fetch the signed URL). We'd rather fail and let
+ * BullMQ retry than let the job hang forever — the SDK enforces no timeout and
+ * BullMQ auto-renews the lock while the handler is pending, so without this a
+ * stuck request never stalls out.
+ */
+const TRANSCRIBE_TIMEOUT_MS = 120_000;
+
+/**
  * Deepgram transcription (prerecorded, by URL). We hand Deepgram a short-lived
  * signed R2 URL rather than streaming bytes through our process.
  *
@@ -22,15 +32,18 @@ export class DeepgramService implements SpeechToTextService {
   }
 
   async transcribeUrl(url: string): Promise<TranscriptData> {
-    const { result, error } = await this.client.listen.prerecorded.transcribeUrl(
-      { url },
-      {
-        model: env.DEEPGRAM_MODEL,
-        smart_format: true,
-        punctuate: true,
-        paragraphs: true,
-        detect_language: true,
-      },
+    const { result, error } = await withTimeout(
+      this.client.listen.prerecorded.transcribeUrl(
+        { url },
+        {
+          model: env.DEEPGRAM_MODEL,
+          smart_format: true,
+          punctuate: true,
+          paragraphs: true,
+          detect_language: true,
+        },
+      ),
+      TRANSCRIBE_TIMEOUT_MS,
     );
 
     if (error) {
@@ -68,4 +81,20 @@ export class DeepgramService implements SpeechToTextService {
       raw: result,
     };
   }
+}
+
+/**
+ * Reject with an ExternalServiceError if `promise` doesn't settle within `ms`.
+ * The underlying request is left to settle on its own (the SDK exposes no abort
+ * handle); we simply stop waiting so the job can fail and be retried.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new ExternalServiceError('deepgram', `transcription timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }

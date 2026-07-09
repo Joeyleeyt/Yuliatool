@@ -1,9 +1,12 @@
-import type { SceneVisualType } from '@yulia/core';
+import type { OverlaySide } from '@yulia/core';
 
 export interface RenderSegment {
-  /** Local path to the downloaded scene asset (clip or still). */
-  path: string;
-  type: SceneVisualType;
+  /** Local path to the wide 16:9 background video clip. */
+  backgroundPath: string;
+  /** Local path to the portrait overlay still (the PiP "window"). */
+  overlayPath: string;
+  /** Which side the overlay window sits on for this scene. */
+  overlaySide: OverlaySide;
   /** On-screen duration this segment must occupy for audio sync. */
   displayDurationSec: number;
 }

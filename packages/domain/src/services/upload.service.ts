@@ -100,7 +100,22 @@ export class UploadService {
 
     // Idempotent dispatch: ledger + BullMQ dedupe on the deterministic key, so a
     // double /complete call cannot enqueue transcription twice.
-    await this.ctx.jobs.dispatch(QueueName.TRANSCRIPTION, { projectId, assetId }, { projectId });
+    //
+    // The status flip above is committed before this line, so a failed enqueue
+    // (e.g. Redis unreachable from the web process) would otherwise leave the
+    // project stranded in TRANSCRIBING with no job ever running. Surface it as a
+    // FAILED project instead — visible in the UI and recoverable via retry.
+    try {
+      await this.ctx.jobs.dispatch(QueueName.TRANSCRIPTION, { projectId, assetId }, { projectId });
+    } catch (cause) {
+      await this.projects
+        .fail(projectId, {
+          code: 'ENQUEUE_FAILED',
+          message: 'Could not queue transcription — job broker unavailable',
+        })
+        .catch(() => undefined);
+      throw cause;
+    }
 
     await this.ctx.repos.activity.log({
       projectId,

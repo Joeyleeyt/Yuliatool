@@ -99,6 +99,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'An elegant woman in light-blue silk pajamas sips a glass of water by a floor-to-ceiling window in a sunlit luxury hotel room, backlit by soft morning glow with sheer curtains drifting, cinematic soft-luxury editorial, shallow depth of field, warm champagne grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static with a whisper of push-in',
       composition: 'Subject centered, backlit, generous negative space',
       lighting: 'Bright soft natural window light',
@@ -113,6 +116,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The same woman in a beige cashmere set cradles a cup of tea on a stone balcony above a coastal golden-hour sunset, steam curling from the cup, warm rim light on her hair, refined editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium-long shot, static',
       composition: 'Subject right-third, coastal view left-third',
       lighting: 'Warm golden-hour sunlight',
@@ -127,6 +133,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in an emerald-green silk slip reclines on white silk sheets in an ornate bedroom, fabric catching a soft sheen, warm interior light, sensual yet tasteful editorial luxury, creamy shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, slow push-in',
       composition: 'Subject centered on the bed, shallow DOF',
       lighting: 'Soft warm interior lighting',
@@ -141,6 +150,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'Extreme macro of a single golden oil droplet falling in slow motion from a glass dropper, sparkling high-key highlights against a warm blurred background, pristine refined product cinematography.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Extreme close-up, macro lens',
       composition: 'Dropper centered vertically, droplet mid-fall',
       lighting: 'High-key with sparkling specular highlights',
@@ -155,6 +167,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'An elegant perfume bottle beside a cluster of white peonies on a wooden table with stacked books, soft side window light, rule-of-thirds, editorial magazine-quality still, warm champagne grade, impeccable fine detail.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Flowers left-third, bottle right-third',
       lighting: 'Soft side lighting from a window',
@@ -169,6 +184,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a gold silk robe applies perfume to her neck, seen through an ornate vanity mirror, a fine mist catching glamorous warm light, sophisticated editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot through mirror reflection',
       composition: 'Subject centered in the mirror frame',
       lighting: 'Warm glamorous vanity lighting',
@@ -183,6 +201,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A curated montage of elegant frosted and clear perfume bottles on clean bright surfaces, even studio light, minimalist aspirational product styling, magazine editorial gloss, crisp fine detail.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-ups, static',
       composition: 'Centered product shots, generous negative space',
       lighting: 'Bright even studio lighting',
@@ -197,6 +218,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a tailored camel blazer walks a bright city sidewalk, hair moving in the wind, warm bokeh of the street behind her, confident editorial fashion cinematography, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, tracking with the subject',
       composition: 'Subject centered, city bokeh behind',
       lighting: 'Natural daylight',
@@ -211,6 +235,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A grouped still of niche perfume bottles arranged on a polished silver tray, soft diffused light, shallow depth of field, refined curated luxury product photography, warm neutral grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-ups, static',
       composition: 'Grouped products, shallow DOF',
       lighting: 'Soft diffused light',
@@ -225,6 +252,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a deep-red silk robe dabs perfume to her pulse points in a dimly lit ornate bedroom, profile view, warm low-key light modeling her form, intimate editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Subject centered, profile view',
       lighting: 'Warm low-key lighting',
@@ -239,6 +269,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A pristine white silk pillowcase on a neatly made bed catching soft natural light, minimalist clean composition, editorial still, delicate sheen and fine weave detail, airy bright bedroom.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Pillow centered, minimalist',
       lighting: 'Soft natural light',
@@ -253,6 +286,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'Extreme close-up gliding across folds of gold silk fabric with a liquid sheen, side light raking the weave, abstract luxurious texture study, slow elegant camera drift.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up, slow pan',
       composition: 'Abstract full-frame texture',
       lighting: 'Side lighting emphasizing the sheen',
@@ -267,6 +303,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman rests peacefully hugging a grey silk pillow, eyes closed, soft cool-toned morning light, serene editorial portrait, shallow depth of field, faceless-channel softness.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered, eyes closed',
       lighting: 'Soft cool-toned light',
@@ -281,6 +320,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman sleeps on white silk in soft morning light, the faintest facial movement and breath, tranquil editorial luxury, warm-white grade, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered on silk',
       lighting: 'Soft morning light',
@@ -295,6 +337,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A soft montage of blush-pink silk pillowcases on a bright bed, even gentle light, tender pastel editorial styling, delicate sheen, clean minimalist composition.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up montage, static',
       composition: 'Centered products',
       lighting: 'Soft even light',
@@ -309,6 +354,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a white robe smooths a silk pillowcase onto a pillow in an ornate bedroom, meticulous graceful hands, warm interior light, refined editorial lifestyle, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered',
       lighting: 'Warm interior light',
@@ -323,6 +371,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman lounges and stretches languidly across silk bedding in soft morning light, restful and graceful, warm editorial luxury, creamy shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shots, gentle push-in',
       composition: 'Subject centered on bedding',
       lighting: 'Soft morning light',
@@ -337,6 +388,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman browses an outdoor flower market, lifting a bunch of peonies to her face, dappled natural daylight, vibrant yet tasteful editorial lifestyle, shallow depth of field, warm grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium tracking shots',
       composition: 'Subject within a rich flower-stall environment',
       lighting: 'Natural daylight',
@@ -351,6 +405,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman trims rose stems over an elegant kitchen counter, white peonies and roses in a crystal vase beside her, bright natural light, therapeutic refined lifestyle, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Subject centered, blooms foregrounded',
       lighting: 'Bright natural light',
@@ -365,6 +422,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A montage of the woman carrying wrapped bouquets through market, home and car, blooms everywhere, joyful warm editorial lifestyle, mixed natural and interior light, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shots, gentle handheld',
       composition: 'Subject with flowers across settings',
       lighting: 'Mixed natural and interior',
@@ -379,6 +439,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'Close on the woman massaging nourishing cream into her hands at a sunlit European cafe table, soft glisten on skin, elegant gestures, refined self-care editorial, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Hands centered on the table',
       lighting: 'Natural daylight',
@@ -393,6 +456,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A pristine montage of luxury hand-cream tubes arranged on marble surfaces, bright clean light, minimalist glossy product styling, editorial magazine detail, cool-neutral grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up montage, static',
       composition: 'Centered products on marble',
       lighting: 'Bright clean light',
@@ -407,6 +473,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman’s manicured hands cradle a cappuccino cup at a cafe, soft daylight and creamy bokeh, refined tactile editorial luxury, shallow depth of field, warm grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up, static',
       composition: 'Hands and cup centered',
       lighting: 'Soft daylight',
@@ -421,6 +490,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'Slow pour of amber tea from an elegant pot into a fine cup on a warm-lit table, rising steam and golden reflections, calm ceremonial editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Teapot and cup centered',
       lighting: 'Warm soft practicals',
@@ -435,6 +507,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A cozy still of elegant tea and coffee equipment grouped on a wooden table, warm practical lighting, artisanal editorial product styling, gold and espresso tones, rich fine detail.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up montage, static',
       composition: 'Grouped objects, rule of thirds',
       lighting: 'Warm practicals',
@@ -449,6 +524,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman sips tea on a bright balcony, calm and unhurried, soft natural daylight, coastal air, serene editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject right-third, open view left',
       lighting: 'Natural daylight',
@@ -463,6 +541,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A neatly styled navy silk pajama set laid on a made bed in soft natural light, classic editorial still, crisp piping detail and gentle sheen, clean minimalist composition.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Set centered on the bed',
       lighting: 'Soft natural light',
@@ -477,6 +558,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A bright curated montage of silk pajama sets in blush and powder-blue on clean interiors, even soft light, tasteful editorial styling, delicate sheen, generous negative space.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shots, static',
       composition: 'Centered sets',
       lighting: 'Bright even light',
@@ -491,6 +575,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in deep-red silk pajamas reads on a library sofa under warm low-key light, turning a page, gold lamp glow, sophisticated intimate editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered with a warm lamp',
       lighting: 'Warm low-key lighting',
@@ -505,6 +592,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in light-blue silk pajamas drinks water in a bright hotel room, echoing the opening, natural window light, peaceful editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered by the window',
       lighting: 'Natural light',
@@ -519,6 +609,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman writes in a leather journal with a weighty crafted fountain pen at a warm-lit library desk, deliberate graceful strokes, focused editorial luxury, shallow depth of field, gold accents.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium close-up, static',
       composition: 'Subject and journal centered',
       lighting: 'Warm focused desk light',
@@ -533,6 +626,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A refined still of luxury fountain pens resting on a desk and in presentation boxes, focused highlights on polished barrels, authoritative editorial product photography, black and gold grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Close-up montage, static',
       composition: 'Centered products, shallow DOF',
       lighting: 'Focused highlights',
@@ -547,6 +643,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a crisp tailored white shirt walks through a bright minimalist art gallery, clean daylight, chic confident editorial fashion cinematography, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, slow tracking',
       composition: 'Subject within airy gallery space',
       lighting: 'Bright clean light',
@@ -561,6 +660,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A clean montage of a white button-down styled different ways against minimalist backgrounds, bright natural light, versatile editorial fashion stills, crisp fabric detail, generous negative space.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shots, static',
       composition: 'Centered wardrobe stills',
       lighting: 'Bright natural light',
@@ -575,6 +677,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'The woman in a tailored white shirt stands composed in a bright modern boardroom, clean office light, poised competent editorial presence, shallow depth of field, cool-neutral grade.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Medium shot, static',
       composition: 'Subject centered in the room',
       lighting: 'Clean office light',
@@ -589,6 +694,9 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       positivePrompt:
         'A warm golden montage reprising every luxury — sipping tea, drifting silk, falling droplet, blooming peonies — soft dissolves, magnificent resolving editorial luxury, shallow depth of field.',
       negativePrompt: NEG,
+      overlayPrompt:
+        'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
+      overlayNegativePrompt: NEG,
       camera: 'Mixed, gentle moves',
       composition: 'Mixed reprise framing',
       lighting: 'Warm golden light',

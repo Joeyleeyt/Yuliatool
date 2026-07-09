@@ -30,7 +30,7 @@ export function RenderView({ id }: { id: string }) {
               <span className="text-sm text-neutral-500">
                 {render.format} · {formatSeconds(render.duration_sec)} · {render.fps ?? '—'} fps
               </span>
-              <a href={data.url!} download>
+              <a href={data.downloadUrl ?? data.url!} download>
                 <Button>Download MP4</Button>
               </a>
             </div>

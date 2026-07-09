@@ -11,7 +11,13 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env, StorageError, SIGNED_URL_TTL } from '@yulia/core';
-import type { StorageService, PutObjectOptions, ObjectMetadata, SignedUpload } from './storage.types.js';
+import type {
+  StorageService,
+  PutObjectOptions,
+  ObjectMetadata,
+  SignedUpload,
+  SignedDownloadOptions,
+} from './storage.types.js';
 
 /**
  * Cloudflare R2 storage via the S3-compatible API.
@@ -171,11 +177,27 @@ export class R2StorageService implements StorageService {
     }
   }
 
-  async createSignedDownloadUrl(key: string, expiresInSec?: number): Promise<string> {
+  async createSignedDownloadUrl(
+    key: string,
+    expiresInSec?: number,
+    opts?: SignedDownloadOptions,
+  ): Promise<string> {
     try {
       return await getSignedUrl(
         this.client,
-        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          // A signed `response-content-disposition` override makes R2 return the
+          // attachment header, so the browser downloads even cross-origin.
+          ...(opts?.downloadFilename
+            ? {
+                ResponseContentDisposition: `attachment; filename="${sanitizeFilename(
+                  opts.downloadFilename,
+                )}"`,
+              }
+            : {}),
+        }),
         { expiresIn: expiresInSec ?? SIGNED_URL_TTL.downloadSec },
       );
     } catch (cause) {
@@ -187,6 +209,12 @@ export class R2StorageService implements StorageService {
     if (!this.publicBase) return null;
     return `${this.publicBase.replace(/\/$/, '')}/${key}`;
   }
+}
+
+/** Strip characters unsafe for a Content-Disposition filename / header value. */
+function sanitizeFilename(name: string): string {
+  const cleaned = name.replace(/["\\\r\n]/g, '').replace(/[^\w.\- ]+/g, '_').trim();
+  return cleaned.length > 0 ? cleaned : 'video.mp4';
 }
 
 function isNotFound(err: unknown): boolean {
