@@ -78,7 +78,12 @@ export const PIP_LAYOUT = {
   // Aspect ratios requested from 69Labs per layer. Background is the render
   // orientation (wide); the overlay is a portrait detail/product shot.
   backgroundAspectRatio: '16:9',
-  overlayAspectRatio: '4:5',
+  // Portrait overlay. Must be an aspect ratio the 69Labs image model accepts —
+  // "Nano Banana 2" allows 1:1, 3:4, 4:3, 9:16, 16:9 (NOT 4:5). 3:4 is the
+  // closest portrait option; the overlay is scaled into a fixed PIP window
+  // (overlayWidthFrac × overlayHeightFrac) at render time, so the exact source
+  // ratio isn't critical — it just has to be portrait and provider-valid.
+  overlayAspectRatio: '3:4',
 } as const;
 
 export type OverlaySide = 'left' | 'right';
