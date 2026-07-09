@@ -7,6 +7,7 @@ import {
   AssetKind,
   ProjectStatus,
   overlaySide,
+  mapLimit,
   NotFoundError,
   ValidationError,
   R2_PREFIX,
@@ -101,10 +102,18 @@ export class RenderService {
           const overall = 10 + Math.round(p.percent * 0.8);
           if (overall - lastPersisted >= 5) {
             lastPersisted = overall;
-            void this.ctx.repos.renders.update(renderId, {
-              progress: overall,
-              status: p.stage === 'mux' ? 'muxing' : 'concatenating',
-            });
+            // Fire-and-forget: a dropped progress write is cosmetic. Swallow
+            // errors so a transient DB blip can't reject an unawaited promise
+            // and crash the worker (the render itself still succeeds/fails on
+            // its own awaited writes).
+            void this.ctx.repos.renders
+              .update(renderId, {
+                progress: overall,
+                status: p.stage === 'mux' ? 'muxing' : 'concatenating',
+              })
+              .catch((err: unknown) =>
+                this.ctx.logger.warn({ err, renderId, overall }, 'render progress write failed (ignored)'),
+              );
           }
         },
       });
@@ -168,21 +177,26 @@ export class RenderService {
     audioDurationSec: number,
     workDir: string,
   ): Promise<RenderSegment[]> {
-    const segments: RenderSegment[] = [];
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i]!;
+    // Stage every scene's two layers concurrently (bounded) instead of scene-by-
+    // scene serial DB lookups + R2 GETs — this is pure I/O dead time at the head
+    // of the render. Order is preserved so segments line up with the timeline.
+    return mapLimit(scenes, env.RENDER_DOWNLOAD_CONCURRENCY, async (scene, i) => {
       const pad = String(i).padStart(4, '0');
 
       // Each scene has two layers: a background video + an overlay image.
-      const bg = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP);
-      const overlay = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.IMAGE);
+      const [bg, overlay] = await Promise.all([
+        this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP),
+        this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.IMAGE),
+      ]);
       if (!bg?.r2_key) throw new ValidationError('Scene background missing', { sceneId: scene.id });
       if (!overlay?.r2_key) throw new ValidationError('Scene overlay missing', { sceneId: scene.id });
 
       const backgroundPath = join(workDir, `bg_${pad}`);
       const overlayPath = join(workDir, `ov_${pad}`);
-      await this.download(bg.r2_key, backgroundPath);
-      await this.download(overlay.r2_key, overlayPath);
+      await Promise.all([
+        this.download(bg.r2_key, backgroundPath),
+        this.download(overlay.r2_key, overlayPath),
+      ]);
 
       // Tile the timeline by scene start times so inter-scene pauses are covered
       // and video length matches the continuous voiceover.
@@ -190,14 +204,13 @@ export class RenderService {
       const displayEnd = next ? next.start_sec : audioDurationSec;
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
-      segments.push({
+      return {
         backgroundPath,
         overlayPath,
         overlaySide: overlaySide(scene.scene_index),
         displayDurationSec,
-      });
-    }
-    return segments;
+      };
+    });
   }
 
   private async download(key: string, dest: string): Promise<void> {

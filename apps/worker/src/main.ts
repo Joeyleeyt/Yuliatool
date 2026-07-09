@@ -16,6 +16,10 @@ import { registerProcessors } from './register.js';
 const log = createLogger({ component: 'worker' });
 
 async function main(): Promise<void> {
+  // BUILD_DATE is stamped at image build time (see worker.Dockerfile +
+  // worker.fly.toml [build.args]). Falls back to a static date for local dev.
+  console.log(`Worker version: ${process.env.BUILD_DATE ?? '2026-07-09'}`);
+
   const health = startHealthServer(Number(process.env.PORT ?? 8080));
   const ctx = createAppContext();
   const connection = createBullConnection();
@@ -45,6 +49,18 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+
+  // Safety net: a stray rejection from a fire-and-forget call (e.g. a background
+  // progress write during a DB blip) must not crash the worker and abort every
+  // in-flight job. Log it; BullMQ still owns per-job failure/retry. An
+  // uncaughtException is more serious — log and drain rather than die abruptly.
+  process.on('unhandledRejection', (reason) => {
+    log.error({ err: reason }, 'unhandled promise rejection (ignored; worker stays up)');
+  });
+  process.on('uncaughtException', (err) => {
+    log.error({ err }, 'uncaught exception; draining');
+    void shutdown('uncaughtException');
+  });
 }
 
 main().catch((err) => {

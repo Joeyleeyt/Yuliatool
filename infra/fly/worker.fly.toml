@@ -6,7 +6,14 @@ app = "yulia-video-worker"
 primary_region = "lhr"
 
 [build]
-  dockerfile = "../docker/worker.Dockerfile"
+#  dockerfile = "../docker/worker.Dockerfile"
+dockerfile = "../docker/worker.Dockerfile"
+  # BUILD_DATE is surfaced by the worker at boot ("Worker version: ...").
+  # This static value is a fallback; the deploy script overrides it with the
+  # real deploy timestamp via:
+  #   fly deploy --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  [build.args]
+    BUILD_DATE = "unknown"
 
 [env]
   NODE_ENV = "production"

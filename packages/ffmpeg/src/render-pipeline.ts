@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { RENDER_ENCODING, TRANSITION, RenderError } from '@yulia/core';
+import { RENDER_ENCODING, TRANSITION, RenderError, mapLimit, env } from '@yulia/core';
 import { ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
 import { compositeScene } from './normalize.js';
 import { probe } from './ffprobe.js';
@@ -21,10 +21,13 @@ export async function renderVideo(input: RenderInput): Promise<RenderOutput> {
   const N = segments.length;
   if (N === 0) throw new RenderError('no segments to render');
 
-  // 1. Composite each scene's two layers into one normalized clip.
-  const normalized: string[] = [];
-  for (let i = 0; i < N; i++) {
-    const seg = segments[i]!;
+  // 1. Composite each scene's two layers into one normalized clip. Scenes are
+  //    independent (each writes its own scene_XXXX.mp4), so run a bounded pool of
+  //    composites concurrently — a single libx264 filter graph doesn't saturate
+  //    the VM's cores, so overlapping them cuts the composite phase (the bulk of
+  //    render time, mapped to 0..70% below) roughly by the pool size.
+  let done = 0;
+  const normalized = await mapLimit(segments, env.RENDER_COMPOSITE_CONCURRENCY, async (seg, i) => {
     const isLast = i === N - 1;
     const targetLen = isLast ? seg.displayDurationSec : seg.displayDurationSec + T;
     const out = join(workDir, `scene_${String(i).padStart(4, '0')}.mp4`);
@@ -36,9 +39,10 @@ export async function renderVideo(input: RenderInput): Promise<RenderOutput> {
       durationSec: targetLen,
     });
 
-    normalized.push(out);
-    input.onProgress?.({ percent: Math.round(((i + 1) / N) * 70), stage: 'normalize' });
-  }
+    done += 1;
+    input.onProgress?.({ percent: Math.round((done / N) * 70), stage: 'normalize' });
+    return out;
+  });
 
   // 2. Crossfade chain -> silent video.
   const silent = join(workDir, 'silent.mp4');

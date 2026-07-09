@@ -38,6 +38,11 @@ RUN node infra/docker/fix-workspace-exports.mjs /app/deploy
 FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Build/deploy timestamp, stamped at `docker build` time (Fly passes it via
+# [build.args] in worker.fly.toml). Surfaced by the worker at boot so logs show
+# exactly which build is running.
+ARG BUILD_DATE=unknown
+ENV BUILD_DATE=${BUILD_DATE}
 # FFmpeg + fonts (for future text overlays) from Debian repos.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates \

@@ -2,7 +2,6 @@ import {
   AssetKind,
   ProjectStatus,
   QueueName,
-  GENERATION_POLL_INTERVAL_SEC,
   PIP_LAYOUT,
   NotFoundError,
   ValidationError,
@@ -33,6 +32,9 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * TWO layers, produced by a single job:
  *   - background: a wide 16:9 VIDEO clip (kind 'video' -> VIDEO_CLIP asset)
  *   - overlay:    a portrait 4:5 IMAGE  (kind 'image' -> IMAGE asset)
+ *
+ * The two layers are generated CONCURRENTLY (see `run`) so a scene's latency is
+ * max(video, image), not their sum.
  *
  * Resumable + idempotent per layer:
  *   - a layer already stored/generated -> skip (no double-spend)
@@ -70,10 +72,13 @@ export class SceneGenerationService {
     const prompt = await this.ctx.repos.prompts.getActiveByScene(sceneId);
     if (!prompt) throw new ValidationError('No active prompt for scene', { sceneId });
 
-    // Generate both layers (background video first, then overlay image). Each is
-    // independently idempotent, so a retry only re-runs the layer that failed.
-    await this.runLayer(projectId, sceneId, 'video', this.backgroundRequest(projectId, sceneId, prompt));
-    await this.runLayer(projectId, sceneId, 'image', this.overlayRequest(projectId, sceneId, prompt));
+    // Generate both layers concurrently. Each layer polls 69Labs independently
+    // and is idempotent (a retry only re-runs the layer that failed), so the
+    // scene's wall-clock time is max(video, image) rather than their sum.
+    await Promise.all([
+      this.runLayer(projectId, sceneId, 'video', this.backgroundRequest(projectId, sceneId, prompt)),
+      this.runLayer(projectId, sceneId, 'image', this.overlayRequest(projectId, sceneId, prompt)),
+    ]);
 
     await this.ctx.jobs.dispatch(
       QueueName.DOWNLOAD_ASSETS,
@@ -177,7 +182,7 @@ export class SceneGenerationService {
         // Timeout is retryable: the next attempt reconciles this same external_id.
         throw new ExternalServiceError('69labs', 'poll timeout', { retryable: true });
       }
-      await sleep(GENERATION_POLL_INTERVAL_SEC * 1000);
+      await sleep(env.GENERATION_POLL_INTERVAL_SEC * 1000);
     }
   }
 

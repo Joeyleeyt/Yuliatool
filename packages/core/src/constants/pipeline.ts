@@ -14,8 +14,8 @@ export const SEGMENT_DURATION = {
 /** Acceptable segmentation window the AI must target per scene. */
 export const SEGMENT_WINDOW_SEC = { min: 5, max: 8 } as const;
 
-/** How often the generation stage polls 69Labs for a result. */
-export const GENERATION_POLL_INTERVAL_SEC = 8;
+// How often the generation stage polls 69Labs for a result now lives in `env`
+// (GENERATION_POLL_INTERVAL_SEC) so it's tunable per-deploy without a rebuild.
 
 /**
  * The alternating visual pattern: even index -> video, odd index -> image.
@@ -35,8 +35,12 @@ export const RENDER_ENCODING = {
   fps: 30,
   videoCodec: 'libx264',
   pixelFormat: 'yuv420p',
-  crf: 18, // visually lossless-ish; high quality for a luxury aesthetic
-  preset: 'slow',
+  // CRF 20 + preset 'medium' encodes markedly faster than 18/'slow' with no
+  // perceptible quality loss at 1080p — the render is the single-threaded tail
+  // of a project (rendering queue is concurrency 1), so this directly cuts
+  // wall-clock time. Drop to 'fast' for a further speed-up if quality allows.
+  crf: 20,
+  preset: 'medium',
   audioCodec: 'aac',
   audioBitrateKbps: 320, // preserve voiceover fidelity
   audioSampleRate: 48_000,

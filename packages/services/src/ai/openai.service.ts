@@ -27,9 +27,9 @@ export class OpenAIService {
   private readonly client: OpenAI;
   private readonly model: string;
 
-  constructor(client?: OpenAI) {
+  constructor(client?: OpenAI, model?: string) {
     this.client = client ?? new OpenAI({ apiKey: env.OPENAI_API_KEY });
-    this.model = env.OPENAI_MODEL;
+    this.model = model ?? env.OPENAI_MODEL;
   }
 
   async complete<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {

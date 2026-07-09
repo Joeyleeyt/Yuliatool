@@ -40,6 +40,10 @@ const EnvSchema = z.object({
   // OpenAI
   OPENAI_API_KEY: z.string().min(1),
   OPENAI_MODEL: z.string().default('gpt-4o-2024-11-20'),
+  // Per-scene prompt generation runs many small structured calls; a faster,
+  // cheaper model keeps quality high while cutting this stage's latency + cost.
+  // Falls back to OPENAI_MODEL if unset.
+  OPENAI_PROMPT_MODEL: z.string().optional(),
 
   // Deepgram
   DEEPGRAM_API_KEY: z.string().min(1),
@@ -60,8 +64,27 @@ const EnvSchema = z.object({
     .transform((v) => v === 'true'),
 
   // Worker tuning
-  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  //
+  // Scene generation is I/O-bound: each job spends its life polling 69Labs, not
+  // using CPU. So concurrency can run well above core count — the ceiling is
+  // 69Labs' own per-account queue, not this machine. 12 lets a typical project's
+  // scenes generate in one or two waves instead of 4-at-a-time.
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(12),
   GENERATION_POLL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1200),
+  // How often the generation stage polls 69Labs for a result. Lower = less dead
+  // time waiting on an already-finished job, at the cost of more (cheap) status
+  // GETs. Tunable without a redeploy.
+  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(4),
+  // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
+  // many-scene project doesn't burst past OpenAI rate limits.
+  PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
+  // Max concurrent scene composites during the FFmpeg render. The render worker
+  // is concurrency 1, but each composite doesn't saturate the VM's cores, so a
+  // small pool (2 on the 2-core performance-2x VM) overlaps encodes. Keep at or
+  // below the VM core count to avoid CPU oversubscription.
+  RENDER_COMPOSITE_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  // Max concurrent R2 asset downloads when staging a render locally.
+  RENDER_DOWNLOAD_CONCURRENCY: z.coerce.number().int().positive().default(6),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

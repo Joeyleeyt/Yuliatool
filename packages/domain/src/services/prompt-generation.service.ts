@@ -1,6 +1,7 @@
 import {
   ProjectStatus,
   QueueName,
+  mapLimit,
   NotFoundError,
   ValidationError,
   ScenePromptSchema,
@@ -15,10 +16,14 @@ import { ProjectService } from './project.service.js';
 import { seedFrom, scenePromptSystem, scenePromptUser, mergeNegativePrompt } from '../ai/index.js';
 
 /**
- * PROMPT_GENERATION stage. Generates one cinematic 69Labs prompt per scene,
- * *sequentially*, feeding each call the global style + previous scene's prompt +
- * next scene's summary so continuity holds across the whole timeline. On
- * completion, advances to VIDEO_GENERATION and fans out per-scene generation
+ * PROMPT_GENERATION stage. Generates one cinematic 69Labs prompt per scene.
+ *
+ * Runs scenes in bounded-concurrency batches (PROMPT_GENERATION_CONCURRENCY) for
+ * speed. Cross-scene continuity is anchored by the analysis's global style guide
+ * + hard CONTINUITY ANCHORS (same woman, wardrobe, world, grade) plus each
+ * scene's STATIC neighbor summaries — all known up front — rather than the
+ * previous scene's live-generated prompt, which is what forced serialization.
+ * On completion, advances to VIDEO_GENERATION and fans out per-scene generation
  * jobs (consumed in Phase 5).
  */
 export class PromptGenerationService {
@@ -30,7 +35,9 @@ export class PromptGenerationService {
     ai?: OpenAIService,
   ) {
     this.projects = new ProjectService(ctx);
-    this.ai = ai ?? new OpenAIService();
+    // Prompt generation is many small structured calls — use the faster/cheaper
+    // prompt model (falls back to OPENAI_MODEL when unset).
+    this.ai = ai ?? new OpenAIService(undefined, env.OPENAI_PROMPT_MODEL ?? env.OPENAI_MODEL);
   }
 
   async run(projectId: string): Promise<void> {
@@ -51,88 +58,113 @@ export class PromptGenerationService {
     const promptStrategyJson = JSON.stringify(analysis.prompt_strategy);
     const anchors = extractAnchors(analysis.continuity_memory);
 
-    let previous: { title: string; positivePrompt: string } | null = null;
+    const shared = { styleGuideJson, promptStrategyJson, anchors, total: scenes.length };
 
-    this.ctx.logger.info({ projectId, scenes: scenes.length }, 'generating scene prompts (openai)');
+    this.ctx.logger.info(
+      { projectId, scenes: scenes.length, concurrency: env.PROMPT_GENERATION_CONCURRENCY },
+      'generating scene prompts (openai, batched)',
+    );
 
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i]!;
-      const next = scenes[i + 1] ?? null;
-      const brief = (scene.visual_brief ?? {}) as Record<string, unknown>;
-
-      this.ctx.logger.info(
-        { projectId, sceneId: scene.id, scene: i + 1, total: scenes.length, visualType: scene.visual_type },
-        'prompting scene',
-      );
-
-      const result: StructuredResult<ScenePromptOutput> = await this.ai.complete<ScenePromptOutput>({
-        schema: ScenePromptSchema,
-        schemaName: 'scene_prompt',
-        system: scenePromptSystem(scene.visual_type),
-        user: scenePromptUser({
-          index: i,
-          total: scenes.length,
-          styleGuideJson,
-          promptStrategyJson,
-          anchors,
-          current: {
-            title: scene.title ?? `Scene ${i + 1}`,
-            summary: scene.summary ?? '',
-            narration: scene.narration_text ?? '',
-            visualIntent: String(brief.visualIntent ?? ''),
-            subject: String(brief.subject ?? ''),
-            environment: String(brief.environment ?? ''),
-            mood: String(brief.mood ?? ''),
-            continuityNotes: scene.continuity_notes ?? '',
-          },
-          previous,
-          next: next ? { title: next.title ?? '', summary: next.summary ?? '' } : null,
-        }),
-        temperature: 0.6,
-        seed: seedFrom(projectId, scene.id),
-      });
-
-      const negative = mergeNegativePrompt(result.data.negativePrompt);
-      // Store both PiP layers in one prompt row: the background lives in the
-      // top-level positive/negative fields; the overlay prompt + its aspect
-      // ratio ride in `parameters` (consumed by the two-layer generation stage).
-      const parameters: Json = {
-        backgroundAspectRatio: PIP_LAYOUT.backgroundAspectRatio,
-        overlayAspectRatio: PIP_LAYOUT.overlayAspectRatio,
-        overlayPrompt: result.data.overlayPrompt,
-        overlayNegativePrompt: mergeNegativePrompt(result.data.overlayNegativePrompt),
-        camera: result.data.camera,
-        composition: result.data.composition,
-        lighting: result.data.lighting,
-        motion: result.data.motion,
-        colorPalette: result.data.colorPalette,
-      };
-
-      await this.ctx.repos.prompts.createVersion({
-        sceneId: scene.id,
-        projectId,
-        model: env.OPENAI_MODEL,
-        positivePrompt: result.data.positivePrompt,
-        negativePrompt: negative,
-        parameters,
-      });
-
-      await this.ctx.repos.generationHistory.record({
-        projectId,
-        sceneId: scene.id,
-        provider: 'openai',
-        operation: 'prompt',
-        status: 'completed',
-        response: (result.usage ?? {}) as unknown as Json,
-      });
-
-      previous = { title: scene.title ?? `Scene ${i + 1}`, positivePrompt: result.data.positivePrompt };
-    }
+    // Run scenes with bounded concurrency. Each scene is independent: continuity
+    // comes from the shared style guide + anchors + static neighbor summaries,
+    // not from other scenes' generated prompts.
+    await mapLimit(scenes, env.PROMPT_GENERATION_CONCURRENCY, (_scene, i) =>
+      this.promptScene(projectId, scenes, i, shared),
+    );
 
     await this.projects.transition(projectId, ProjectStatus.VIDEO_GENERATION);
     await this.fanOutGeneration(projectId, scenes);
 
     this.ctx.logger.info({ projectId, prompts: scenes.length }, 'prompt generation complete');
+  }
+
+  /** Generate + persist the prompt for a single scene (index `i`). */
+  private async promptScene(
+    projectId: string,
+    scenes: SceneRow[],
+    i: number,
+    shared: { styleGuideJson: string; promptStrategyJson: string; anchors: string[]; total: number },
+  ): Promise<void> {
+    const scene = scenes[i]!;
+    const prevScene = scenes[i - 1] ?? null;
+    const next = scenes[i + 1] ?? null;
+    const brief = (scene.visual_brief ?? {}) as Record<string, unknown>;
+
+    this.ctx.logger.info(
+      { projectId, sceneId: scene.id, scene: i + 1, total: shared.total, visualType: scene.visual_type },
+      'prompting scene',
+    );
+
+    // Static continuity: reference the previous scene's title + summary (known
+    // up front) rather than its generated prompt, so scenes parallelize. The
+    // hard anchors above still bind the shared subject/wardrobe/world/grade.
+    const previous = prevScene
+      ? {
+          title: prevScene.title ?? `Scene ${i}`,
+          positivePrompt: prevScene.summary ?? prevScene.title ?? `Scene ${i}`,
+        }
+      : null;
+
+    const result: StructuredResult<ScenePromptOutput> = await this.ai.complete<ScenePromptOutput>({
+      schema: ScenePromptSchema,
+      schemaName: 'scene_prompt',
+      system: scenePromptSystem(scene.visual_type),
+      user: scenePromptUser({
+        index: i,
+        total: shared.total,
+        styleGuideJson: shared.styleGuideJson,
+        promptStrategyJson: shared.promptStrategyJson,
+        anchors: shared.anchors,
+        current: {
+          title: scene.title ?? `Scene ${i + 1}`,
+          summary: scene.summary ?? '',
+          narration: scene.narration_text ?? '',
+          visualIntent: String(brief.visualIntent ?? ''),
+          subject: String(brief.subject ?? ''),
+          environment: String(brief.environment ?? ''),
+          mood: String(brief.mood ?? ''),
+          continuityNotes: scene.continuity_notes ?? '',
+        },
+        previous,
+        next: next ? { title: next.title ?? '', summary: next.summary ?? '' } : null,
+      }),
+      temperature: 0.6,
+      seed: seedFrom(projectId, scene.id),
+    });
+
+    const negative = mergeNegativePrompt(result.data.negativePrompt);
+    // Store both PiP layers in one prompt row: the background lives in the
+    // top-level positive/negative fields; the overlay prompt + its aspect
+    // ratio ride in `parameters` (consumed by the two-layer generation stage).
+    const parameters: Json = {
+      backgroundAspectRatio: PIP_LAYOUT.backgroundAspectRatio,
+      overlayAspectRatio: PIP_LAYOUT.overlayAspectRatio,
+      overlayPrompt: result.data.overlayPrompt,
+      overlayNegativePrompt: mergeNegativePrompt(result.data.overlayNegativePrompt),
+      camera: result.data.camera,
+      composition: result.data.composition,
+      lighting: result.data.lighting,
+      motion: result.data.motion,
+      colorPalette: result.data.colorPalette,
+    };
+
+    await this.ctx.repos.prompts.createVersion({
+      sceneId: scene.id,
+      projectId,
+      model: env.OPENAI_PROMPT_MODEL ?? env.OPENAI_MODEL,
+      positivePrompt: result.data.positivePrompt,
+      negativePrompt: negative,
+      parameters,
+    });
+
+    await this.ctx.repos.generationHistory.record({
+      projectId,
+      sceneId: scene.id,
+      provider: 'openai',
+      operation: 'prompt',
+      status: 'completed',
+      response: (result.usage ?? {}) as unknown as Json,
+    });
   }
 
   /**
@@ -141,13 +173,16 @@ export class PromptGenerationService {
    * overlay image (see SceneGenerationService) — no separate image fan-out.
    */
   private async fanOutGeneration(projectId: string, scenes: SceneRow[]): Promise<void> {
-    for (const scene of scenes) {
-      await this.ctx.jobs.dispatch(
+    // Dispatch is per-scene DB read + write + Redis enqueue. Fan them out in a
+    // bounded pool so the whole enqueue completes in ~one round-trip's time
+    // instead of one scene at a time (pure latency at this stage boundary).
+    await mapLimit(scenes, env.PROMPT_GENERATION_CONCURRENCY, (scene) =>
+      this.ctx.jobs.dispatch(
         QueueName.VIDEO_GENERATION,
         { projectId, sceneId: scene.id },
         { projectId, sceneId: scene.id },
-      );
-    }
+      ),
+    );
   }
 }
 

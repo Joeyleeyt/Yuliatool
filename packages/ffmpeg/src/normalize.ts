@@ -1,5 +1,5 @@
 import { RENDER_ENCODING, TRANSITION, PIP_LAYOUT, type OverlaySide } from '@yulia/core';
-import { ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
+import { INTERMEDIATE_ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
 import { probe } from './ffprobe.js';
 
 export interface NormalizeOpts {
@@ -92,7 +92,7 @@ export async function compositeScene(
     '-t',
     d,
     '-an',
-    ...ENCODE_ARGS,
+    ...INTERMEDIATE_ENCODE_ARGS,
     output,
   ]);
 }
@@ -116,7 +116,7 @@ export async function normalizeVideoSegment(
     `format=${RENDER_ENCODING.pixelFormat}`,
   ].join(',');
 
-  await runFfmpeg(['-i', input, '-t', o.durationSec.toFixed(3), '-an', '-vf', vf, ...ENCODE_ARGS, output]);
+  await runFfmpeg(['-i', input, '-t', o.durationSec.toFixed(3), '-an', '-vf', vf, ...INTERMEDIATE_ENCODE_ARGS, output]);
 }
 
 /**
@@ -152,7 +152,7 @@ export async function normalizeImageSegment(
     '-an',
     '-vf',
     vf,
-    ...ENCODE_ARGS,
+    ...INTERMEDIATE_ENCODE_ARGS,
     output,
   ]);
 }

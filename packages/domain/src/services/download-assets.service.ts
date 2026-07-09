@@ -54,9 +54,13 @@ export class DownloadAssetsService {
 
     await this.ctx.repos.scenes.updateStatus(sceneId, 'downloading');
 
-    // Store BOTH composite layers; each is idempotent (skips if already stored).
-    await this.downloadLayer(projectId, sceneId, 'video', scene.duration_sec);
-    await this.downloadLayer(projectId, sceneId, 'image', scene.duration_sec);
+    // Store BOTH composite layers concurrently; each is independent and
+    // idempotent (skips if already stored), so per-scene download wall-clock is
+    // max(video, image) rather than their sum.
+    await Promise.all([
+      this.downloadLayer(projectId, sceneId, 'video', scene.duration_sec),
+      this.downloadLayer(projectId, sceneId, 'image', scene.duration_sec),
+    ]);
 
     // Scene is complete only once both layers are in R2 -> counts toward fan-in.
     await this.ctx.repos.scenes.updateStatus(sceneId, 'stored');
