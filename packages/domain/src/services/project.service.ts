@@ -10,6 +10,7 @@ import {
   type Paginated,
 } from '@yulia/core';
 import type { ProjectRow } from '@yulia/db';
+import { purgeProject } from '@yulia/queue';
 import type { AppContext } from '../context.js';
 import { RecoveryService } from './recovery.service.js';
 
@@ -65,9 +66,21 @@ export class ProjectService {
     return updated;
   }
 
-  /** Delete the project and all its R2 objects (prefix delete). DB cascades handle rows. */
+  /**
+   * Delete the project, its queued jobs, and all its R2 objects. DB cascades
+   * handle the rows. Order matters: purge the queue FIRST so no worker picks up
+   * a job for a project that's about to vanish (which would 404 on every retry
+   * and pollute the worker). Queue purge is best-effort — a transient Redis
+   * issue must not block the authoritative DB + storage deletion.
+   */
   async remove(id: string, ownerId: string): Promise<void> {
     await this.get(id, ownerId); // ownership guard
+    try {
+      const { removed, skipped } = await purgeProject(id);
+      this.ctx.logger.info({ projectId: id, removed, skipped }, 'project queue jobs purged');
+    } catch (err) {
+      this.ctx.logger.warn({ projectId: id, err }, 'queue purge failed; continuing with delete');
+    }
     await this.ctx.storage.deletePrefix(`${R2_PREFIX.project(id)}/`);
     await this.ctx.repos.projects.deleteById(id);
     this.ctx.logger.info({ projectId: id, ownerId }, 'project removed');
