@@ -3,15 +3,18 @@ import {
   QueueName,
   NotFoundError,
   ValidationError,
+  ExternalServiceError,
   AnalysisSchema,
   SegmentationSchema,
   SEGMENT_WINDOW_SEC,
+  SEGMENTATION_CHUNK,
   overlayTreatmentForScene,
   env,
   type SegmentScene,
+  type SegmentationOutput,
 } from '@yulia/core';
 import type { Json, NewScene } from '@yulia/db';
-import { OpenAIService } from '@yulia/services';
+import { OpenAIService, type StructuredResult } from '@yulia/services';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
 import {
@@ -92,27 +95,80 @@ export class AnalysisService {
     }
 
     // --- Stage 2: segmentation ---
-    this.ctx.logger.info({ projectId }, 'segmenting transcript into scenes (openai)');
-    const segmentation = await this.ai.complete({
-      schema: SegmentationSchema,
-      schemaName: 'segmentation',
-      system: segmentationSystem(),
-      user: segmentationUser(
-        units,
-        JSON.stringify(analysis.data.styleGuide),
-        analysis.data.visualMotifs,
-        analysis.data.continuityAnchors,
-      ),
-      temperature: 0.3,
-      seed: seedFrom(projectId, 'segment'),
-    });
+    // Chunked into multiple OpenAI calls (see SEGMENTATION_CHUNK) so a long
+    // transcript never asks one response to emit the whole scene list — that
+    // silently truncates against the model's max output tokens (a truncated-but-
+    // syntactically-valid partial array used to be accepted as "done", see
+    // OpenAIService's finish_reason check).
+    this.ctx.logger.info({ projectId, units: units.length }, 'segmenting transcript into scenes (openai)');
+    const unitChunks = chunkUnits(units);
+    const segScenes: SegmentScene[] = [];
+    let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    let precedingLastTitle: string | null = null;
 
-    const scenes = buildScenes(units, segmentation.data.scenes);
+    for (let c = 0; c < unitChunks.length; c++) {
+      const chunk = unitChunks[c]!;
+      const precedingChunk = c > 0 ? unitChunks[c - 1]! : null;
+      const precedingText = precedingChunk
+        ? precedingChunk
+            .slice(-SEGMENTATION_CHUNK.overlapUnits)
+            .map((u) => u.text)
+            .join(' ')
+        : null;
+
+      const segmentation: StructuredResult<SegmentationOutput> = await this.ai.complete({
+        schema: SegmentationSchema,
+        schemaName: 'segmentation',
+        system: segmentationSystem(),
+        user: segmentationUser(
+          chunk,
+          JSON.stringify(analysis.data.styleGuide),
+          analysis.data.visualMotifs,
+          analysis.data.continuityAnchors,
+          {
+            chunkIndex: c + 1,
+            chunkTotal: unitChunks.length,
+            precedingText,
+            precedingLastTitle,
+          },
+        ),
+        temperature: 0.3,
+        seed: seedFrom(projectId, 'segment', String(c)),
+      });
+
+      segScenes.push(...segmentation.data.scenes);
+      const lastScene = segmentation.data.scenes.at(-1);
+      if (lastScene) precedingLastTitle = lastScene.title;
+      if (segmentation.usage) {
+        totalUsage = {
+          promptTokens: totalUsage.promptTokens + segmentation.usage.promptTokens,
+          completionTokens: totalUsage.completionTokens + segmentation.usage.completionTokens,
+          totalTokens: totalUsage.totalTokens + segmentation.usage.totalTokens,
+        };
+      }
+    }
+
+    const scenes = buildScenes(units, segScenes);
     if (scenes.length === 0) throw new ValidationError('Segmentation produced no scenes', { projectId });
+
+    // Guard against silent partial coverage (the original failure mode): if the
+    // scenes don't reach the end of the transcript, something upstream dropped
+    // data — fail loudly (retryable) instead of completing a truncated video.
+    const transcriptEndSec = units[units.length - 1]!.end;
+    const scenesEndSec = scenes[scenes.length - 1]!.endSec;
+    const coverageGapSec = transcriptEndSec - scenesEndSec;
+    if (coverageGapSec > SEGMENT_WINDOW_SEC.split) {
+      throw new ExternalServiceError(
+        'openai',
+        `segmentation covers only ${scenesEndSec.toFixed(1)}s of ${transcriptEndSec.toFixed(1)}s ` +
+          `of transcript (gap ${coverageGapSec.toFixed(1)}s)`,
+        { retryable: true },
+      );
+    }
 
     const rows = await this.ctx.repos.scenes.replaceForProject(projectId, scenes);
     await this.ctx.repos.projects.setSceneTotals(projectId, rows.length);
-    await this.recordAI(projectId, 'segment', segmentation.usage);
+    await this.recordAI(projectId, 'segment', totalUsage);
 
     await this.projects.transition(projectId, ProjectStatus.PROMPT_GENERATION);
     await this.ctx.jobs.dispatch(QueueName.PROMPT_GENERATION, { projectId }, { projectId });
@@ -133,6 +189,34 @@ export class AnalysisService {
       response: (usage ?? {}) as unknown as Json,
     });
   }
+}
+
+/**
+ * Split transcript units into contiguous windows of ~SEGMENTATION_CHUNK.
+ * targetWindowSec each, so segmentation never has to ask one OpenAI call to
+ * emit scenes for the whole transcript at once (see SEGMENTATION_CHUNK doc).
+ * Splits happen at unit boundaries only — every unit belongs to exactly one
+ * chunk, so the chunks partition `units` with no gaps or overlaps.
+ */
+function chunkUnits(units: TranscriptUnit[]): TranscriptUnit[][] {
+  if (units.length === 0) return [];
+  const chunks: TranscriptUnit[][] = [];
+  let current: TranscriptUnit[] = [];
+  let windowStartSec = units[0]!.start;
+
+  for (const unit of units) {
+    if (
+      current.length > 0 &&
+      unit.end - windowStartSec > SEGMENTATION_CHUNK.targetWindowSec
+    ) {
+      chunks.push(current);
+      current = [];
+      windowStartSec = unit.start;
+    }
+    current.push(unit);
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
 }
 
 /** A contiguous transcript-unit range that will become one persisted scene. */

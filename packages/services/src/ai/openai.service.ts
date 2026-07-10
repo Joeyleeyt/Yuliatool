@@ -57,6 +57,17 @@ export class OpenAIService {
         retryable: false,
       });
     }
+    if (choice.finish_reason === 'length') {
+      // The model hit its max output tokens mid-response. The SDK still parses
+      // whatever JSON completed before the cutoff (e.g. a truncated array), which
+      // looks like a valid-but-wrong result if we don't check this explicitly —
+      // silently accepting it drops data (e.g. a segmentation response cut off
+      // after only the first few scenes of a long transcript). Retryable so the
+      // caller can chunk the request smaller and retry.
+      throw new ExternalServiceError('openai', 'response truncated: exceeded max output tokens', {
+        retryable: true,
+      });
+    }
     const data = choice.message.parsed;
     if (data === null || data === undefined) {
       throw new ExternalServiceError('openai', 'structured parse returned empty');

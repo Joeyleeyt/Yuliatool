@@ -18,6 +18,18 @@ import { SceneVisualType } from '../enums/asset.js';
 export const SEGMENT_WINDOW_SEC = { min: 10, max: 15, target: 12, split: 15 } as const;
 
 /**
+ * Segmentation is chunked across multiple OpenAI calls for long transcripts so
+ * a single response never has to emit the whole scene list at once. At ~12s per
+ * scene (SEGMENT_WINDOW_SEC.target), ~180s of narration is ~15 scenes x 7 fields
+ * each — comfortably inside gpt-4o's 16,384-token output ceiling even with very
+ * verbose fields, while a full 10+ minute video (~50+ scenes) would not be.
+ * `overlapUnits` repeats the last few units of narration as read-only context in
+ * the next chunk's prompt (not re-segmented) purely so the model can keep tone/
+ * continuity across the boundary; the actual split point is exact and gapless.
+ */
+export const SEGMENTATION_CHUNK = { targetWindowSec: 180, overlapUnits: 3 } as const;
+
+/**
  * Overlay rotation within a scene. The overlay window swaps to a fresh image
  * every ~5–8s, so a 10–15s scene shows 1–2 overlays (≤~11s → 1, longer → 2).
  * Across a 600s video that yields ~50–100 overlay images.

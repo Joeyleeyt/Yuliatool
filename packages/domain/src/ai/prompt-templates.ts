@@ -37,18 +37,50 @@ export function segmentationSystem(): string {
   );
 }
 
-export function segmentationUser(units: TranscriptUnit[], styleGuideJson: string, motifs: string[], anchors: string[]): string {
+export interface SegmentationChunkContext {
+  /** 1-based position of this chunk among the total chunks for the transcript. */
+  chunkIndex: number;
+  chunkTotal: number;
+  /** Trailing narration from the END of the previous chunk, for tone/continuity
+   * only — these units are NOT part of `units` and must not be re-segmented. */
+  precedingText: string | null;
+  /** Title of the last scene emitted by the previous chunk, so a topic that
+   * continues across the boundary can keep the same title (same listicle item). */
+  precedingLastTitle: string | null;
+}
+
+export function segmentationUser(
+  units: TranscriptUnit[],
+  styleGuideJson: string,
+  motifs: string[],
+  anchors: string[],
+  chunk?: SegmentationChunkContext,
+): string {
   const unitLines = units
     .map((u) => `[${u.index}] (${u.start.toFixed(2)}-${u.end.toFixed(2)}s) ${u.text}`)
     .join('\n');
+  const chunkPreamble =
+    chunk && chunk.chunkTotal > 1
+      ? `This is PART ${chunk.chunkIndex} of ${chunk.chunkTotal} of one continuous transcript, split only to ` +
+        `keep each request small — segment ONLY the units listed below (their indices continue from the ` +
+        `previous part; do not renumber them).\n` +
+        (chunk.precedingText
+          ? `Narration immediately BEFORE this part (context only, already segmented — do NOT emit scenes for ` +
+            `it): "...${chunk.precedingText}"\n` +
+            `If this part opens mid-topic, keep continuing that topic under the SAME title ` +
+            `("${chunk.precedingLastTitle ?? ''}") until the narration actually moves on.\n`
+          : '') +
+        '\n'
+      : '';
   return (
+    chunkPreamble +
     `STYLE GUIDE:\n${styleGuideJson}\n` +
     `MOTIFS: ${motifs.join(', ')}\n` +
     `CONTINUITY ANCHORS: ${anchors.join(', ')}\n\n` +
     `TRANSCRIPT UNITS (index, time range, text):\n${unitLines}\n\n` +
     `Group CONTIGUOUS units into scenes. Each scene is a continuous range ` +
     `[startIndex..endIndex] with NO gaps or overlaps; together the scenes must cover ALL units ` +
-    `in order (use the timestamps for length).\n\n` +
+    `listed above, in order (use the timestamps for length).\n\n` +
     `CADENCE — target ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max} seconds of narration ` +
     `per scene (aim ~${SEGMENT_WINDOW_SEC.target}s). Do NOT return a few giant topic scenes: cut ` +
     `each topic into several ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max}s beats. A ` +
