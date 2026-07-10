@@ -31,6 +31,16 @@ const CONTENT_TYPE: Record<GenerationKind, string> = {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Gap between a scene's successive layer submits (video first, then each
+ * overlay image slot). Spreads out the burst of POST /generate calls a single
+ * scene fires via Promise.all — small enough to be invisible against a
+ * generation's overall runtime (tens of seconds to minutes), but enough to
+ * measurably thin out how many submits land in the exact same instant across
+ * the worker's concurrently-running scenes.
+ */
+const SUBMIT_STAGGER_MS = 600;
+
+/**
  * Per-scene generation for the picture-in-picture composite. Every scene has
  * TWO layers, produced by a single job:
  *   - background: a wide 16:9 VIDEO clip (kind 'video' -> VIDEO_CLIP asset)
@@ -84,7 +94,12 @@ export class SceneGenerationService {
 
     // Generate the required layer(s) concurrently. Each layer polls 69Labs
     // independently and is idempotent (a retry only re-runs the layer that
-    // failed), so a scene's wall-clock is max over its layers.
+    // failed), so a scene's wall-clock is max over its layers. The SUBMIT
+    // moment (not the poll loop) is staggered a little per layer — see
+    // SUBMIT_STAGGER_MS — so a single scene doesn't fire up to 4 simultaneous
+    // POST /generate calls in the same instant; combined across the worker's
+    // concurrent scenes that burst is what trips 69Labs' concurrent-job cap
+    // (much lower than its per-minute rate limit — see SixtyNineLabsClient).
     const layers: Promise<void>[] = [
       this.runLayer(
         projectId,
@@ -92,6 +107,7 @@ export class SceneGenerationService {
         'video',
         0,
         this.backgroundRequest(projectId, sceneId, prompt, hasOverlay),
+        0,
       ),
     ];
     if (hasOverlay) {
@@ -107,6 +123,7 @@ export class SceneGenerationService {
             'image',
             slot,
             this.overlayRequest(projectId, sceneId, prompt, slot),
+            (slot + 1) * SUBMIT_STAGGER_MS,
           ),
         );
       }
@@ -125,7 +142,8 @@ export class SceneGenerationService {
    * Ensure one layer's asset reaches `generated` (or is already stored). `slot`
    * is the rotation index for overlay images (0 for the background and the first
    * overlay); it's persisted in the asset's `metadata.slot` so download/render
-   * can address each overlay independently.
+   * can address each overlay independently. `submitDelayMs` staggers only the
+   * initial POST /generate call (not the poll loop) — see SUBMIT_STAGGER_MS.
    */
   private async runLayer(
     projectId: string,
@@ -133,6 +151,7 @@ export class SceneGenerationService {
     kind: GenerationKind,
     slot: number,
     req: GenerationRequest,
+    submitDelayMs: number,
   ): Promise<void> {
     const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
     let asset =
@@ -156,6 +175,7 @@ export class SceneGenerationService {
     let externalId = asset.external_id;
 
     if (!externalId) {
+      if (submitDelayMs > 0) await sleep(submitDelayMs);
       this.ctx.logger.info({ projectId, sceneId, kind }, 'submitting layer to 69labs');
       const submission = await gen.submit(req);
       externalId = submission.externalId;

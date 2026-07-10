@@ -25,10 +25,13 @@ dockerfile = "../docker/worker.Dockerfile"
   # GENERATION_POLL_INTERVAL_SEC per layer for the whole generation duration, not
   # just at submit. With 2 machines (min_machines_running below) the ACCOUNT-WIDE
   # concurrent load is ~2x this value, since 69Labs' rate limit is per-account,
-  # not per-machine. 4 was chosen after WORKER_CONCURRENCY=12 (24 account-wide)
-  # reliably triggered sustained 429s on both submit and status-poll calls; dial
-  # further down if 429s persist, or up once confirmed the account tolerates more.
-  VIDEO_GENERATION_CONCURRENCY = "4"
+  # not per-machine. 69Labs ALSO caps concurrent in-flight jobs directly (5
+  # videos, 7 images, account-wide — see SixtyNineLabsClient's 403 handling),
+  # which is the binding constraint: at 4 (8 scenes account-wide x up to 3 image
+  # layers each) submit bursts ran 3x over the image cap. 2 keeps worst-case
+  # video submits (4) under 5 and meaningfully thins the image burst — dial
+  # further down if 403s persist, or up once confirmed the account tolerates more.
+  VIDEO_GENERATION_CONCURRENCY = "2"
   # More parallel scene composites within a single render (see VM sizing below).
   # Keep in sync with the [[vm]] core count.
   RENDER_COMPOSITE_CONCURRENCY = "8"

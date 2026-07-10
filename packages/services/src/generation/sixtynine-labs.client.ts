@@ -53,6 +53,22 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const RATE_LIMIT_MAX_RETRIES = 6;
 const RATE_LIMIT_BASE_DELAY_MS = 1_500;
 
+/**
+ * 69Labs also enforces a separate CONCURRENT in-flight job cap per account
+ * (distinct from the per-minute 429 above) — submitting while already at the
+ * cap 403s with "Concurrent {video|image} generation limit reached (N)". A
+ * slot only frees once an EXISTING job elsewhere on the account finishes
+ * (tens of seconds to minutes), not on a fixed per-minute window, so this only
+ * absorbs a couple of quick retries in-process (to smooth a slot freeing up
+ * right around submit time) and otherwise surfaces the error as retryable —
+ * BullMQ's own VIDEO_GENERATION policy (6 attempts, 15s exponential backoff)
+ * then handles the rest, RELEASING this worker's concurrency slot between
+ * attempts so other queued scenes can run instead of blocking on this one.
+ */
+const CONCURRENCY_LIMIT_MAX_RETRIES = 2;
+const CONCURRENCY_LIMIT_DELAY_MS = 8_000;
+const CONCURRENCY_LIMIT_MESSAGE = /concurrent .* generation limit reached/i;
+
 export class SixtyNineLabsClient {
   constructor(
     private readonly apiKey: string = env.SIXTYNINE_LABS_API_KEY,
@@ -148,9 +164,19 @@ export class SixtyNineLabsClient {
             continue;
           }
           const text = await res.text().catch(() => '');
-          // 4xx = our fault (bad params / no credits), don't retry; 5xx + 429 = transient.
+          const isConcurrencyLimit = res.status === 403 && CONCURRENCY_LIMIT_MESSAGE.test(text);
+          if (isConcurrencyLimit && attempt < CONCURRENCY_LIMIT_MAX_RETRIES) {
+            // Absorb a couple of quick retries in-process (smooths a slot
+            // freeing up right around submit time); beyond that, fall through
+            // to the retryable throw below so BullMQ's own backoff takes over
+            // and this worker's concurrency slot frees for other scenes.
+            await sleep(concurrencyLimitDelayMs(attempt));
+            continue;
+          }
+          // 4xx = our fault (bad params / no credits), don't retry; 5xx + 429 +
+          // the concurrent-job-limit 403 are transient (BullMQ retries them).
           throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
-            retryable: res.status >= 500 || res.status === 429,
+            retryable: res.status >= 500 || res.status === 429 || isConcurrencyLimit,
           });
         }
         return (await res.json()) as unknown;
@@ -206,6 +232,17 @@ function rateLimitDelayMs(res: Response, attempt: number): number {
   const backoff = RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
   const jitter = Math.random() * RATE_LIMIT_BASE_DELAY_MS;
   return backoff + jitter;
+}
+
+/**
+ * Delay before retrying a concurrent-job-limit 403. Flat (not exponential) —
+ * unlike a 429's per-minute window, a freed slot could open at any moment as
+ * ANY in-flight job on the account completes, so there's no reason to back off
+ * further with each attempt. Jittered so scenes that all got capacity-rejected
+ * together don't all resubmit in the same instant and re-trip the limit.
+ */
+function concurrencyLimitDelayMs(attempt: number): number {
+  return CONCURRENCY_LIMIT_DELAY_MS + Math.random() * CONCURRENCY_LIMIT_DELAY_MS * (attempt === 0 ? 0.5 : 1);
 }
 
 function sleep(ms: number): Promise<void> {
