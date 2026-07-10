@@ -23,7 +23,8 @@ dockerfile = "../docker/worker.Dockerfile"
   # If 69Labs starts returning 429s, dial this back toward their account limit.
   WORKER_CONCURRENCY = "12"
   # More parallel scene composites within a single render (see VM sizing below).
-  RENDER_COMPOSITE_CONCURRENCY = "4"
+  # Keep in sync with the [[vm]] core count.
+  RENDER_COMPOSITE_CONCURRENCY = "8"
 
 # No [http_service]: the worker is not an HTTP app. It exposes a tiny health
 # server on 8080 for Fly checks only.
@@ -43,13 +44,16 @@ dockerfile = "../docker/worker.Dockerfile"
     grace_period = "20s"
 
 # Rendering is CPU + memory heavy; give it room. More cores directly shorten the
-# single render tail (parallel scene composites, faster libx264 mux). `count = 2`
-# adds a second machine for cross-PROJECT throughput — the rendering queue is
+# single render tail (parallel scene composites, faster libx264 mux). Bumped
+# from performance-4x -> performance-8x (4 -> 8 cores) so RENDER_COMPOSITE_
+# CONCURRENCY=8 above doesn't oversubscribe; this roughly doubles single-render
+# composite-phase throughput at 2x the per-machine cost. `count = 2` adds a
+# second machine for cross-PROJECT throughput — the rendering queue is
 # concurrency-1 per machine, so two machines render two different projects at
 # once (it does NOT speed up a single render). Keep min_machines_running in sync.
 [[vm]]
-  size = "performance-4x"
-  memory = "8gb"
+  size = "performance-8x"
+  memory = "16gb"
   count = 2
 
 # Ephemeral scratch disk for FFmpeg asset download + render staging. Each machine

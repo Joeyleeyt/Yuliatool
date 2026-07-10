@@ -17,7 +17,7 @@ import {
   env,
 } from '@yulia/core';
 import type { SceneRow, Json } from '@yulia/db';
-import { renderVideo, type RenderSegment } from '@yulia/ffmpeg';
+import { compositeSegment, concatAndMux, type RenderSegment } from '@yulia/ffmpeg';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
 
@@ -73,50 +73,65 @@ export class RenderService {
         progress: 2,
       });
 
-      // Download voiceover + each scene asset locally.
+      // Download the voiceover locally (needed up front for the final mux).
       this.ctx.logger.info(
         { projectId, renderId, scenes: scenes.length },
-        'render: downloading voiceover + scene assets',
+        'render: downloading voiceover, then staging + compositing scenes',
       );
       const voicePath = join(workDir, 'voiceover');
       await this.download(voiceover.r2_key, voicePath);
 
-      const segments = await this.buildSegments(scenes, audioDurationSec, workDir);
-
       await this.ctx.repos.renders.update(renderId, { status: 'normalizing', progress: 10 });
 
+      // Download each scene's assets AND composite it in one pooled pass, so
+      // scene N starts compositing the moment its own download lands instead
+      // of waiting for every scene in the project to finish downloading first
+      // (the old two-phase download-all-then-composite-all order left the
+      // composite pool's CPU idle for the whole download phase).
       this.ctx.logger.info(
-        { projectId, renderId, segments: segments.length, width, height },
-        'render: encoding video (ffmpeg)',
+        { projectId, renderId, scenes: scenes.length, width, height },
+        'render: staging + encoding video (ffmpeg)',
       );
       const outputPath = join(workDir, 'final.mp4');
       let lastPersisted = 10;
-      const result = await renderVideo({
-        segments,
+      const reportProgress = (percent: number, stage: 'normalize' | 'concat' | 'mux') => {
+        // Map pipeline 0..100 onto 10..90; throttle DB writes to ~5% steps.
+        const overall = 10 + Math.round(percent * 0.8);
+        if (overall - lastPersisted >= 5) {
+          lastPersisted = overall;
+          // Fire-and-forget: a dropped progress write is cosmetic. Swallow
+          // errors so a transient DB blip can't reject an unawaited promise
+          // and crash the worker (the render itself still succeeds/fails on
+          // its own awaited writes).
+          void this.ctx.repos.renders
+            .update(renderId, {
+              progress: overall,
+              status: stage === 'mux' ? 'muxing' : 'concatenating',
+            })
+            .catch((err: unknown) =>
+              this.ctx.logger.warn({ err, renderId, overall }, 'render progress write failed (ignored)'),
+            );
+        }
+      };
+
+      const { normalized, displayDurations } = await this.stageAndCompositeSegments(
+        scenes,
+        audioDurationSec,
+        workDir,
+        width,
+        height,
+        (done, total) => reportProgress(Math.round((done / total) * 70), 'normalize'),
+      );
+
+      const result = await concatAndMux({
+        normalized,
+        displayDurations,
         voiceoverPath: voicePath,
         outputPath,
         width,
         height,
         workDir,
-        onProgress: (p) => {
-          // Map pipeline 0..100 onto 10..90; throttle DB writes to ~5% steps.
-          const overall = 10 + Math.round(p.percent * 0.8);
-          if (overall - lastPersisted >= 5) {
-            lastPersisted = overall;
-            // Fire-and-forget: a dropped progress write is cosmetic. Swallow
-            // errors so a transient DB blip can't reject an unawaited promise
-            // and crash the worker (the render itself still succeeds/fails on
-            // its own awaited writes).
-            void this.ctx.repos.renders
-              .update(renderId, {
-                progress: overall,
-                status: p.stage === 'mux' ? 'muxing' : 'concatenating',
-              })
-              .catch((err: unknown) =>
-                this.ctx.logger.warn({ err, renderId, overall }, 'render progress write failed (ignored)'),
-              );
-          }
-        },
+        onProgress: (p) => reportProgress(p.percent, p.stage),
       });
 
       // Upload the final MP4 to R2 (streamed, not buffered).
@@ -173,21 +188,31 @@ export class RenderService {
     }
   }
 
-  private async buildSegments(
+  /**
+   * Download each scene's assets AND composite it, in one pooled pass keyed to
+   * `RENDER_COMPOSITE_CONCURRENCY` (the CPU-bound step). Each pool worker
+   * downloads its scene's background + overlays, then immediately composites
+   * that scene, so compositing for scene N starts as soon as scene N's own
+   * assets land instead of waiting on every scene in the project to download
+   * first. Order is preserved so results line up with the timeline.
+   */
+  private async stageAndCompositeSegments(
     scenes: SceneRow[],
     audioDurationSec: number,
     workDir: string,
-  ): Promise<RenderSegment[]> {
+    width: number,
+    height: number,
+    onProgress: (done: number, total: number) => void,
+  ): Promise<{ normalized: string[]; displayDurations: number[] }> {
     // Derive the listicle item number + title-card scene up front (mapLimit runs
     // concurrently, so a running counter inside it would race). A new item begins
     // at the first scene and whenever the scene title changes; the title card is
     // burned only on that first scene of the item.
     const itemMeta = computeItemMeta(scenes);
+    const N = scenes.length;
+    let done = 0;
 
-    // Stage every scene's two layers concurrently (bounded) instead of scene-by-
-    // scene serial DB lookups + R2 GETs — this is pure I/O dead time at the head
-    // of the render. Order is preserved so segments line up with the timeline.
-    return mapLimit(scenes, env.RENDER_DOWNLOAD_CONCURRENCY, async (scene, i) => {
+    const results = await mapLimit(scenes, env.RENDER_COMPOSITE_CONCURRENCY, async (scene, i) => {
       const pad = String(i).padStart(4, '0');
 
       // Product beats have a background + 1–2 rotated overlays; video-only beats
@@ -223,7 +248,7 @@ export class RenderService {
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
       const meta = itemMeta[i]!;
-      return {
+      const segment: RenderSegment = {
         backgroundPath,
         overlayPaths, // empty for full-frame video-only scenes
         overlaySide: overlaySide(scene.scene_index),
@@ -231,7 +256,17 @@ export class RenderService {
         // Only the first scene of each item carries the title card.
         ...(meta.showCard ? { titleText: meta.titleText, itemNumber: meta.itemNumber } : {}),
       };
+
+      const normalizedPath = await compositeSegment(segment, i, i === N - 1, { width, height, workDir });
+      done += 1;
+      onProgress(done, N);
+      return { normalizedPath, displayDurationSec };
     });
+
+    return {
+      normalized: results.map((r) => r.normalizedPath),
+      displayDurations: results.map((r) => r.displayDurationSec),
+    };
   }
 
   private async download(key: string, dest: string): Promise<void> {

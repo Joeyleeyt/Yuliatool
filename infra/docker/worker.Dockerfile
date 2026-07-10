@@ -47,6 +47,12 @@ ENV BUILD_DATE=${BUILD_DATE}
 # for title cards; ffmpeg itself is the only hard requirement here. Keep this
 # layer free of any network dependency beyond the Debian mirror so the build
 # can't fail on a third-party fetch.
+#
+# This is a SOFTWARE-only ffmpeg build (no NVENC/QSV). RENDER_HW_ACCEL
+# (packages/core/src/config/env.ts) defaults to 'none' to match. To actually
+# use hardware encoding: (1) move the Fly VM to a GPU-backed size, (2) swap this
+# base image for one with NVENC support (e.g. an nvidia/cuda base + ffmpeg built
+# --enable-nvenc, or jrottenberg/ffmpeg:nvidia), (3) set RENDER_HW_ACCEL=nvenc.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*

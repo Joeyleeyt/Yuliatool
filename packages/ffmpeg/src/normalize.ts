@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import {
   RENDER_ENCODING,
   TRANSITION,
@@ -9,6 +10,7 @@ import {
 import { INTERMEDIATE_ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
 import { probe } from './ffprobe.js';
 import { titleCardFont } from './fonts.js';
+import { getPipMasks } from './pip-masks.js';
 
 export interface NormalizeOpts {
   width: number;
@@ -145,11 +147,14 @@ export async function compositeScene(
   const x = Math.round(W * (side === 'left' ? PIP_LAYOUT.leftXFrac : PIP_LAYOUT.rightXFrac));
   // Raise the window above dead-center so the lower-left title card has room.
   const y = Math.round((H - oh) / 2 - H * PIP_LAYOUT.verticalBiasFrac);
-  const r = PIP_LAYOUT.cornerRadiusPx;
   const off = PIP_LAYOUT.shadowOffsetPx;
-  const sigma = (PIP_LAYOUT.shadowBlurPx / 3).toFixed(2);
   const d = o.durationSec.toFixed(3);
   const pix = RENDER_ENCODING.pixelFormat;
+
+  // Window mask + shadow are identical for every scene at this window size (the
+  // canvas size doesn't change mid-render) — generated once per render and
+  // reused here instead of recomputing the shape with `geq` every frame.
+  const { windowMaskPath, shadowPath } = await getPipMasks(dirname(output), ow, oh);
 
   // The overlay window PUNCTUATES the background: it enters a beat after the
   // scene starts and exits before it ends. Its visible span is then divided
@@ -174,14 +179,15 @@ export async function compositeScene(
   // Fit the background to the scene by gently slowing it (PTS).
   const slow = await backgroundSlowFactor(backgroundPath, o.durationSec);
 
-  // Rounded-rectangle alpha: a pixel is inside if its distance to the inner
-  // rect (inset by r) is <= r. Single-quoted so commas survive filtergraph parsing.
-  const roundedAlpha =
-    `'if(lte(hypot(X-clip(X,${r},W-1-${r}),Y-clip(Y,${r},H-1-${r})),${r}),255,0)'`;
-
   // Warm "quiet luxury" grade on the BACKGROUND only.
   const grade = gradeFilter();
   const titleChain = title ? buildTitleCardChain(W, H, title) : '';
+
+  // Input indices: 0 = background, 1 = shadow PNG (looped, shared by every
+  // overlay slice), 2 = window mask PNG (looped), 3..3+n-1 = overlay clips.
+  const shadowIdx = 1;
+  const maskIdx = 2;
+  const overlayInputBase = 3;
 
   const parts: string[] = [
     // Background: cover-crop, gentle slow-mo to fill, fix fps, safety clone-pad, grade.
@@ -189,25 +195,28 @@ export async function compositeScene(
       `setpts=${slow}*PTS,fps=${fps},tpad=stop_mode=clone:stop_duration=${d},${grade},setsar=1[bg]`,
   ];
 
-  // Each overlay: round corners, fade in at its slice start and out at its slice
-  // end, then composite (with its shadow) gated to that slice so exactly one
-  // image is visible at a time and they hand off with a soft cross-fade.
+  // Each overlay: merge the pre-baked rounded-rect mask onto its alpha channel
+  // (replaces per-frame `geq`), fade in/out at its slice, then composite (with
+  // the shared pre-baked shadow) gated to that slice so exactly one image is
+  // visible at a time and they hand off with a soft cross-fade. The mask/shadow
+  // source pads are re-read (not `split`) per slice — cheap, since each is a
+  // single still image, not a video decode.
   let prev = 'bg';
   for (let i = 0; i < n; i++) {
     const sStart = ovStart + i * sliceLen;
     const sEnd = i === n - 1 ? ovEnd : sStart + sliceLen;
     const fadeOutAt = Math.max(sStart, sEnd - PIP_LAYOUT.fadeOutSec).toFixed(3);
     const gate = `enable='between(t,${sStart.toFixed(3)},${sEnd.toFixed(3)})'`;
-    const inIdx = i + 1; // input 0 is the background
+    const inIdx = overlayInputBase + i;
 
     parts.push(
-      `[${inIdx}:v]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a=${roundedAlpha},` +
+      `[${shadowIdx}:v]format=rgba[shadowsrc${i}]`,
+      `[${maskIdx}:v]format=gray[mask${i}]`,
+      `[${inIdx}:v]format=rgba[ovlrgb${i}]`,
+      `[ovlrgb${i}][mask${i}]alphamerge,` +
         `fade=t=in:st=${sStart.toFixed(3)}:d=${PIP_LAYOUT.fadeInSec}:alpha=1,` +
-        `fade=t=out:st=${fadeOutAt}:d=${PIP_LAYOUT.fadeOutSec}:alpha=1,setsar=1[ovlbase${i}]`,
-      `[ovlbase${i}]split[ovl${i}][forshadow${i}]`,
-      `[forshadow${i}]geq=r=0:g=0:b=0:a='alpha(X,Y)',gblur=sigma=${sigma},` +
-        `colorchannelmixer=aa=${PIP_LAYOUT.shadowOpacity}[shadow${i}]`,
-      `[${prev}][shadow${i}]overlay=x=${x + off}:y=${y + off}:${gate}[bgs${i}]`,
+        `fade=t=out:st=${fadeOutAt}:d=${PIP_LAYOUT.fadeOutSec}:alpha=1,setsar=1[ovl${i}]`,
+      `[${prev}][shadowsrc${i}]overlay=x=${x + off}:y=${y + off}:${gate}[bgs${i}]`,
       // The last composite also gets the title-card chain + output format/label.
       i === n - 1
         ? `[bgs${i}][ovl${i}]overlay=x=${x}:y=${y}:${gate}${titleChain},format=${pix}[out]`
@@ -219,6 +228,14 @@ export async function compositeScene(
   await runFfmpeg([
     '-i',
     backgroundPath,
+    '-loop',
+    '1',
+    '-i',
+    shadowPath,
+    '-loop',
+    '1',
+    '-i',
+    windowMaskPath,
     ...overlayClips.flatMap((c) => ['-i', c]),
     '-filter_complex',
     parts.join(';'),

@@ -89,11 +89,19 @@ const EnvSchema = z.object({
   PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
   // Max concurrent scene composites during the FFmpeg render. The render worker
   // is concurrency 1, but each composite doesn't saturate the VM's cores, so a
-  // small pool (2 on the 2-core performance-2x VM) overlaps encodes. Keep at or
-  // below the VM core count to avoid CPU oversubscription.
-  RENDER_COMPOSITE_CONCURRENCY: z.coerce.number().int().positive().default(2),
-  // Max concurrent R2 asset downloads when staging a render locally.
-  RENDER_DOWNLOAD_CONCURRENCY: z.coerce.number().int().positive().default(6),
+  // pool overlaps encodes. Keep at or below the VM core count to avoid CPU
+  // oversubscription. Default matches the deployed performance-4x (4-core) VM;
+  // override lower for local dev on fewer cores.
+  RENDER_COMPOSITE_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  // Hardware video encoder to use instead of software libx264, IF the worker
+  // image + VM actually provide it (NVENC needs an NVIDIA GPU VM + an ffmpeg
+  // build with NVENC support; QSV needs Intel Quick Sync). Off ('none') by
+  // default because the current deployed VM (performance-8x) has no GPU and
+  // the stock Debian ffmpeg package has no NVENC — enabling this without both
+  // in place makes every render fail. Only set to 'nvenc'/'qsv' after
+  // provisioning a GPU-backed Fly VM and switching the worker Dockerfile's
+  // ffmpeg to a build with the matching encoder compiled in.
+  RENDER_HW_ACCEL: z.enum(['none', 'nvenc', 'qsv']).default('none'),
   // Absolute path to the serif .ttf/.otf used for numbered title cards. Unset
   // -> the worker image's bundled Cinzel path. Set for local rendering on a
   // machine without that font installed.

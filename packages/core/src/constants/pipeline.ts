@@ -110,13 +110,13 @@ export const RENDER_ENCODING = {
   fps: 30,
   videoCodec: 'libx264',
   pixelFormat: 'yuv420p',
-  // CRF 20 + preset 'fast' encodes markedly faster than 18/'slow' with no
+  // CRF 20 + preset 'veryfast' encodes markedly faster than 18/'slow' with no
   // perceptible quality loss at 1080p — the final mux is the single-threaded
   // tail of a project (rendering queue is concurrency 1), so the preset directly
-  // cuts wall-clock time. 'fast' vs 'medium' is a further speed-up that's visually
-  // indistinguishable at CRF 20; drop to 'veryfast' if the tail is still too long.
+  // cuts wall-clock time. 'veryfast' vs 'fast'/'medium' is visually
+  // indistinguishable at CRF 20; only step back up if artifacts show up in practice.
   crf: 20,
-  preset: 'fast',
+  preset: 'veryfast',
   audioCodec: 'aac',
   audioBitrateKbps: 320, // preserve voiceover fidelity
   audioSampleRate: 48_000,
