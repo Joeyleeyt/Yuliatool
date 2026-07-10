@@ -84,7 +84,7 @@ export function segmentationUser(
     `CADENCE — target ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max} seconds of narration ` +
     `per scene (aim ~${SEGMENT_WINDOW_SEC.target}s). Do NOT return a few giant topic scenes: cut ` +
     `each topic into several ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max}s beats. A ` +
-    `10-minute video should yield roughly 40-60 scenes. (Any scene longer than ` +
+    `10-minute video should yield roughly 30-38 scenes. (Any scene longer than ` +
     `${SEGMENT_WINDOW_SEC.split}s is automatically split downstream, so keep them tight.)\n\n` +
     `For each scene give: title, summary, visualIntent, subject, environment, mood, and ` +
     `continuityNotes that explicitly reference the anchors so the sequence stays visually ` +

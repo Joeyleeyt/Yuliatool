@@ -6,23 +6,29 @@ import { SceneVisualType } from '../enums/asset.js';
  */
 
 /**
- * Segmentation cadence: every scene is 10–15s. A 10-minute (600s) video is thus
- * cut into ~40–60 scenes. This is HARD-ENFORCED in buildScenes (any LLM scene
- * longer than the max is split into even sub-scenes), because the model alone
- * ignored the window and returned a handful of giant topic groups.
+ * Segmentation cadence: every scene is 16–25s. A 20-minute (1200s) video is thus
+ * cut into ~50–65 scenes (roughly half the count at the old 10-15s cadence) —
+ * fewer 69Labs generation calls (cost, wall-clock, rate-limit pressure) while
+ * scenes stay grounded in real transcript timestamps either way, so audio/video
+ * sync is unaffected by this number. This is HARD-ENFORCED in buildScenes (any
+ * LLM scene longer than the max is split into even sub-scenes), because the
+ * model alone ignored the window and returned a handful of giant topic groups.
  *
  * `SEGMENT_WINDOW_SEC` is the target the prompt asks for AND the split bound the
  * code enforces: `.split` is the longest a scene may be before it's divided;
- * splits aim for `.target` seconds each.
+ * splits aim for `.target` seconds each. `.split` (25s) is sized against
+ * TRANSITION.maxSlowFactor: 69Labs' default model returns ~8s clips with no
+ * duration control, so an 8s clip must be slowed up to 25/8 = 3.125x to fill the
+ * longest scene without freeze-padding — see maxSlowFactor's doc.
  */
-export const SEGMENT_WINDOW_SEC = { min: 10, max: 15, target: 12, split: 15 } as const;
+export const SEGMENT_WINDOW_SEC = { min: 16, max: 25, target: 20, split: 25 } as const;
 
 /**
  * Segmentation is chunked across multiple OpenAI calls for long transcripts so
- * a single response never has to emit the whole scene list at once. At ~12s per
- * scene (SEGMENT_WINDOW_SEC.target), ~180s of narration is ~15 scenes x 7 fields
+ * a single response never has to emit the whole scene list at once. At ~20s per
+ * scene (SEGMENT_WINDOW_SEC.target), ~180s of narration is ~9 scenes x 7 fields
  * each — comfortably inside gpt-4o's 16,384-token output ceiling even with very
- * verbose fields, while a full 10+ minute video (~50+ scenes) would not be.
+ * verbose fields, while a full 10+ minute video (~30+ scenes) would not be.
  * `overlapUnits` repeats the last few units of narration as read-only context in
  * the next chunk's prompt (not re-segmented) purely so the model can keep tone/
  * continuity across the boundary; the actual split point is exact and gapless.
@@ -31,13 +37,14 @@ export const SEGMENTATION_CHUNK = { targetWindowSec: 180, overlapUnits: 3 } as c
 
 /**
  * Overlay rotation within a scene. The overlay window swaps to a fresh image
- * every ~5–8s, so a 10–15s scene shows 1–2 overlays (≤~11s → 1, longer → 2).
- * Across a 600s video that yields ~50–100 overlay images.
- *   - min/max: each overlay image is on screen this long.
+ * every ~8–10s (on screen ~5s of true visibility once fade in/out and the
+ * scene's entry/exit offsets are subtracted — see PIP_LAYOUT), so a 16–25s
+ * scene shows 2–3 overlays (≤~21s → 2, longer → 3).
+ *   - min/max: each overlay SLOT (rotation period) is this long.
  *   - target:  preferred slot length used to compute how many overlays a scene
- *              needs (ceil(sceneDuration / target), clamped to [1, maxPerScene]).
+ *              needs (round(sceneDuration / target), clamped to [1, maxPerScene]).
  */
-export const OVERLAY_SLOT_SEC = { min: 5, max: 8, target: 7, maxPerScene: 2 } as const;
+export const OVERLAY_SLOT_SEC = { min: 8, max: 10, target: 8.5, maxPerScene: 3 } as const;
 
 /**
  * Number of overlay images a scene of `sceneDurationSec` should rotate through,
@@ -131,9 +138,11 @@ export const TRANSITION = {
   /**
    * Cap on how far a short background clip may be slowed (via PTS) to fill its
    * scene, instead of freezing the last frame. Keeps motion fluid without
-   * extreme, unnatural slow-motion.
+   * extreme, unnatural slow-motion. Sized to SEGMENT_WINDOW_SEC.split (25s) ÷ an
+   * ~8s native 69Labs clip = 3.125x, so even the longest scene is fully covered
+   * by slow-motion with zero freeze-frame tail (see SEGMENT_WINDOW_SEC doc).
    */
-  maxSlowFactor: 2.5,
+  maxSlowFactor: 3.2,
 } as const;
 
 /**
