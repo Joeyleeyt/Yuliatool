@@ -78,11 +78,12 @@ const EnvSchema = z.object({
   // to active work — it only throttles empty-queue polling. Default 30s.
   WORKER_DRAIN_DELAY_SEC: z.coerce.number().int().positive().default(30),
   GENERATION_POLL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1200),
-  // How often the generation stage polls 69Labs for a result. Each poll also
-  // touches Redis (job state), so on metered Redis a very low interval is costly.
-  // 5s balances low dead-time against Redis + status-GET volume. Lower only if
-  // Redis is unmetered; raise if 69Labs rate-limits status polls.
-  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(5),
+  // How often the generation stage polls 69Labs for a result. Lower = less dead
+  // time between a scene finishing on 69Labs and the worker noticing (matters
+  // now that a project has 40–60 scenes). Redis is unmetered (pay-as-you-go), so
+  // the only real floor is 69Labs' status-GET rate limit; 2s stays well under it.
+  // Raise only if 69Labs rate-limits status polls.
+  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
   // many-scene project doesn't burst past OpenAI rate limits.
   PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
