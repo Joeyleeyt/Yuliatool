@@ -102,6 +102,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static with a whisper of push-in',
       composition: 'Subject centered, backlit, generous negative space',
       lighting: 'Bright soft natural window light',
@@ -119,6 +120,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium-long shot, static',
       composition: 'Subject right-third, coastal view left-third',
       lighting: 'Warm golden-hour sunlight',
@@ -136,6 +138,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, slow push-in',
       composition: 'Subject centered on the bed, shallow DOF',
       lighting: 'Soft warm interior lighting',
@@ -153,6 +156,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Extreme close-up, macro lens',
       composition: 'Dropper centered vertically, droplet mid-fall',
       lighting: 'High-key with sparkling specular highlights',
@@ -170,6 +174,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Flowers left-third, bottle right-third',
       lighting: 'Soft side lighting from a window',
@@ -187,6 +192,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot through mirror reflection',
       composition: 'Subject centered in the mirror frame',
       lighting: 'Warm glamorous vanity lighting',
@@ -204,6 +210,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-ups, static',
       composition: 'Centered product shots, generous negative space',
       lighting: 'Bright even studio lighting',
@@ -221,6 +228,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, tracking with the subject',
       composition: 'Subject centered, city bokeh behind',
       lighting: 'Natural daylight',
@@ -238,6 +246,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-ups, static',
       composition: 'Grouped products, shallow DOF',
       lighting: 'Soft diffused light',
@@ -255,6 +264,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Subject centered, profile view',
       lighting: 'Warm low-key lighting',
@@ -272,6 +282,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Pillow centered, minimalist',
       lighting: 'Soft natural light',
@@ -289,6 +300,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up, slow pan',
       composition: 'Abstract full-frame texture',
       lighting: 'Side lighting emphasizing the sheen',
@@ -306,6 +318,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered, eyes closed',
       lighting: 'Soft cool-toned light',
@@ -323,6 +336,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered on silk',
       lighting: 'Soft morning light',
@@ -340,6 +354,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up montage, static',
       composition: 'Centered products',
       lighting: 'Soft even light',
@@ -357,6 +372,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered',
       lighting: 'Warm interior light',
@@ -374,6 +390,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shots, gentle push-in',
       composition: 'Subject centered on bedding',
       lighting: 'Soft morning light',
@@ -391,6 +408,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium tracking shots',
       composition: 'Subject within a rich flower-stall environment',
       lighting: 'Natural daylight',
@@ -408,6 +426,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Subject centered, blooms foregrounded',
       lighting: 'Bright natural light',
@@ -425,6 +444,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shots, gentle handheld',
       composition: 'Subject with flowers across settings',
       lighting: 'Mixed natural and interior',
@@ -442,6 +462,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Hands centered on the table',
       lighting: 'Natural daylight',
@@ -459,6 +480,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up montage, static',
       composition: 'Centered products on marble',
       lighting: 'Bright clean light',
@@ -476,6 +498,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up, static',
       composition: 'Hands and cup centered',
       lighting: 'Soft daylight',
@@ -493,6 +516,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Teapot and cup centered',
       lighting: 'Warm soft practicals',
@@ -510,6 +534,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up montage, static',
       composition: 'Grouped objects, rule of thirds',
       lighting: 'Warm practicals',
@@ -527,6 +552,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject right-third, open view left',
       lighting: 'Natural daylight',
@@ -544,6 +570,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Set centered on the bed',
       lighting: 'Soft natural light',
@@ -561,6 +588,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shots, static',
       composition: 'Centered sets',
       lighting: 'Bright even light',
@@ -578,6 +606,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered with a warm lamp',
       lighting: 'Warm low-key lighting',
@@ -595,6 +624,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered by the window',
       lighting: 'Natural light',
@@ -612,6 +642,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium close-up, static',
       composition: 'Subject and journal centered',
       lighting: 'Warm focused desk light',
@@ -629,6 +660,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Close-up montage, static',
       composition: 'Centered products, shallow DOF',
       lighting: 'Focused highlights',
@@ -646,6 +678,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, slow tracking',
       composition: 'Subject within airy gallery space',
       lighting: 'Bright clean light',
@@ -663,6 +696,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shots, static',
       composition: 'Centered wardrobe stills',
       lighting: 'Bright natural light',
@@ -680,6 +714,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Medium shot, static',
       composition: 'Subject centered in the room',
       lighting: 'Clean office light',
@@ -697,6 +732,7 @@ export const REFERENCE_LUXURY_SCENES: DemoScene[] = [
       overlayPrompt:
         'A tight editorial detail insert in the same warm soft-luxury grade — a signature object, texture, or grooming close-up in portrait framing, shallow depth of field, magazine-quality.',
       overlayNegativePrompt: NEG,
+      overlayPrompt2: null,
       camera: 'Mixed, gentle moves',
       composition: 'Mixed reprise framing',
       lighting: 'Warm golden light',

@@ -162,8 +162,9 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `same world and grade — tighter framing, a complementary subject, not a repeat of the ` +
     `background) and overlayNegativePrompt. Also provide overlayPrompt2: a SECOND, DIFFERENT ` +
     `complementary detail in the same world/grade (another object, angle, or texture — not a ` +
-    `repeat of overlayPrompt) that the overlay window rotates to on longer scenes. Keep the ` +
-    `elegant, high-end, soft-luxury editorial aesthetic throughout.`
+    `repeat of overlayPrompt) that the overlay window rotates to on longer scenes — set it to ` +
+    `null if this scene only needs one overlay. Keep the elegant, high-end, soft-luxury ` +
+    `editorial aesthetic throughout.`
   );
 }
 

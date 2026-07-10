@@ -85,8 +85,14 @@ const EnvSchema = z.object({
   // Raise only if 69Labs rate-limits status polls.
   GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
-  // many-scene project doesn't burst past OpenAI rate limits.
-  PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
+  // many-scene project doesn't burst past OpenAI rate limits. Each call is
+  // ~1000-1500 tokens; OpenAI Tier 1 caps gpt-4o at 30,000 TPM, so concurrency
+  // 8 bursts 8,000-12,000 tokens in a couple seconds and reliably exhausts the
+  // per-minute budget on any project with more than a handful of scenes (see
+  // OpenAIService's in-process 429 retry, which absorbs occasional overflow —
+  // this default keeps normal bursts under the cap in the first place). Raise
+  // this only if the account is on a higher OpenAI usage tier.
+  PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(3),
   // Max concurrent scene composites during the FFmpeg render. The render worker
   // is concurrency 1, but each composite doesn't saturate the VM's cores, so a
   // pool overlaps encodes. Keep at or below the VM core count to avoid CPU

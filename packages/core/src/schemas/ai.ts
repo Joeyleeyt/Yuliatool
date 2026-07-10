@@ -85,6 +85,8 @@ export const ScenePromptSchema = z.object({
   // Optional SECOND overlay for longer scenes: a DIFFERENT complementary detail
   // (another angle/object in the same world) that the overlay window rotates to
   // mid-scene. Used only when the scene is long enough for two overlay slots.
-  overlayPrompt2: z.string().optional(),
+  // Strict json_schema mode requires every property present -> nullable, not
+  // optional (see file header); the model returns null when it has nothing to add.
+  overlayPrompt2: z.string().nullable(),
 });
 export type ScenePromptOutput = z.infer<typeof ScenePromptSchema>;
