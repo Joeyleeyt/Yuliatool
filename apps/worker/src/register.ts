@@ -1,6 +1,6 @@
 import type { Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
-import { QueueName } from '@yulia/core';
+import { QueueName, env } from '@yulia/core';
 import { createQueueWorker } from '@yulia/queue';
 import type { AppContext } from '@yulia/domain';
 import { defineProcessor } from './runtime/run-processor.js';
@@ -40,6 +40,9 @@ export function registerProcessors(connection: Redis, ctx: AppContext): Worker[]
       QueueName.VIDEO_GENERATION,
       defineProcessor(QueueName.VIDEO_GENERATION, videoGenerationHandler, ctx),
       connection,
+      // Separate, lower-by-default cap: this is the one queue that hits 69Labs
+      // directly (see VIDEO_GENERATION_CONCURRENCY doc in @yulia/core env).
+      { concurrency: env.VIDEO_GENERATION_CONCURRENCY ?? env.WORKER_CONCURRENCY },
     ),
     createQueueWorker(
       QueueName.IMAGE_GENERATION,

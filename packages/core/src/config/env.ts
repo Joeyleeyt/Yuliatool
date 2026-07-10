@@ -65,11 +65,21 @@ const EnvSchema = z.object({
 
   // Worker tuning
   //
-  // Scene generation is I/O-bound: each job spends its life polling 69Labs, not
-  // using CPU. So concurrency can run well above core count — the ceiling is
-  // 69Labs' own per-account queue, not this machine. 12 lets a typical project's
-  // scenes generate in one or two waves instead of 4-at-a-time.
+  // Default BullMQ concurrency for queues that DON'T have a dedicated override
+  // below (transcription, script-analysis, prompt-generation's dispatch/fan-out
+  // steps, download-assets). These are I/O-bound but not against 69Labs, so 12
+  // is fine.
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(12),
+  // VIDEO_GENERATION is the one queue that hits 69Labs directly — each active
+  // job polls GET /status every GENERATION_POLL_INTERVAL_SEC per layer (video +
+  // up to 2 image overlays) until terminal, for the whole generation duration
+  // (minutes), not just at submit. At WORKER_CONCURRENCY=12 that's a sustained
+  // double-digit requests/second load that reliably trips 69Labs' per-account
+  // rate limit (see SixtyNineLabsClient's in-process 429 retry, which absorbs
+  // occasional overflow — this default keeps normal load under the limit in the
+  // first place). Kept separate from WORKER_CONCURRENCY so lowering it doesn't
+  // also throttle unrelated queues. Falls back to WORKER_CONCURRENCY when unset.
+  VIDEO_GENERATION_CONCURRENCY: z.coerce.number().int().positive().optional(),
   // How long an idle BullMQ worker blocks waiting for a job before re-polling
   // Redis. Higher = far fewer Redis commands when queues are empty (each of the
   // 7 queues × N machines otherwise re-polls every few seconds 24/7), which
@@ -80,9 +90,9 @@ const EnvSchema = z.object({
   GENERATION_POLL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1200),
   // How often the generation stage polls 69Labs for a result. Lower = less dead
   // time between a scene finishing on 69Labs and the worker noticing (matters
-  // now that a project has 40–60 scenes). Redis is unmetered (pay-as-you-go), so
-  // the only real floor is 69Labs' status-GET rate limit; 2s stays well under it.
-  // Raise only if 69Labs rate-limits status polls.
+  // now that a project has 40–60 scenes). This is the dominant source of 69Labs
+  // request volume (one GET per layer per tick, for every active scene) — raise
+  // it, or lower VIDEO_GENERATION_CONCURRENCY, if 429s persist.
   GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
   // many-scene project doesn't burst past OpenAI rate limits. Each call is

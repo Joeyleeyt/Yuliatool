@@ -40,6 +40,19 @@ export interface ProviderGeneration {
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * How many times a single request retries a 429 (rate limit) in-process before
+ * surfacing as a job failure. With WORKER_CONCURRENCY scenes polling every
+ * GENERATION_POLL_INTERVAL_SEC concurrently, 69Labs' per-account rate limit is
+ * hit routinely under normal load, not just as a rare hiccup — without this, a
+ * single 429 on either the submit or a status poll burns one of only
+ * VIDEO_GENERATION's 6 BullMQ attempts (see QUEUE_RETRY_POLICY), and a scene
+ * polling every 2s for minutes will exhaust its attempts on rate limits alone
+ * well before the generation itself finishes.
+ */
+const RATE_LIMIT_MAX_RETRIES = 6;
+const RATE_LIMIT_BASE_DELAY_MS = 1_500;
+
 export class SixtyNineLabsClient {
   constructor(
     private readonly apiKey: string = env.SIXTYNINE_LABS_API_KEY,
@@ -111,33 +124,42 @@ export class SixtyNineLabsClient {
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const res = await fetch(`${this.baseUrl}${path}`, {
-        method,
-        headers: {
-          authorization: `Bearer ${this.apiKey}`,
-          'content-type': 'application/json',
-          accept: 'application/json',
-        },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        // 4xx = our fault (bad params / no credits), don't retry; 5xx + 429 = transient.
-        throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
-          retryable: res.status >= 500 || res.status === 429,
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${this.apiKey}`,
+            'content-type': 'application/json',
+            accept: 'application/json',
+          },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+          signal: controller.signal,
         });
+
+        if (!res.ok) {
+          if (res.status === 429 && attempt < RATE_LIMIT_MAX_RETRIES) {
+            // Retry in-process: at normal WORKER_CONCURRENCY load, 69Labs' rate
+            // limit is hit routinely (not a rare hiccup), so absorb it here
+            // instead of burning a BullMQ job attempt per 429.
+            await sleep(rateLimitDelayMs(res, attempt));
+            continue;
+          }
+          const text = await res.text().catch(() => '');
+          // 4xx = our fault (bad params / no credits), don't retry; 5xx + 429 = transient.
+          throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
+            retryable: res.status >= 500 || res.status === 429,
+          });
+        }
+        return (await res.json()) as unknown;
+      } catch (cause) {
+        if (cause instanceof ExternalServiceError) throw cause;
+        throw new ExternalServiceError('69labs', `${method} ${path} request failed`, { cause });
+      } finally {
+        clearTimeout(timer);
       }
-      return (await res.json()) as unknown;
-    } catch (cause) {
-      if (cause instanceof ExternalServiceError) throw cause;
-      throw new ExternalServiceError('69labs', `${method} ${path} request failed`, { cause });
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -164,6 +186,30 @@ export class SixtyNineLabsClient {
       raw: json,
     };
   }
+}
+
+/**
+ * Delay before the next rate-limit retry. Prefers the response's `Retry-After`
+ * header (seconds or an HTTP-date, per spec) when 69Labs sends one; falls back
+ * to exponential backoff with jitter (jitter spreads out concurrent scenes that
+ * all got 429'd on the same beat, so they don't all retry in lockstep and
+ * immediately re-trip the limit).
+ */
+function rateLimitDelayMs(res: Response, attempt: number): number {
+  const header = res.headers.get('retry-after');
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000) + 250;
+    const dateMs = Date.parse(header);
+    if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now()) + 250;
+  }
+  const backoff = RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
+  const jitter = Math.random() * RATE_LIMIT_BASE_DELAY_MS;
+  return backoff + jitter;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function mapStatus(raw: unknown): GenerationStatus {
