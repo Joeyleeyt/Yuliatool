@@ -41,6 +41,15 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 const SUBMIT_STAGGER_MS = 600;
 
 /**
+ * How long a single 69Labs job may be reconciled (re-polled across retries)
+ * before it's presumed permanently wedged and abandoned for a fresh resubmit,
+ * as a multiple of GENERATION_POLL_TIMEOUT_SEC: the first timeout gets one
+ * grace reconcile (in case the job really was just slow and is about to
+ * finish), the second confirms it's stuck rather than transiently delayed.
+ */
+const RECONCILE_BUDGET_POLL_TIMEOUTS = 2;
+
+/**
  * Per-scene generation for the picture-in-picture composite. Every scene has
  * TWO layers, produced by a single job:
  *   - background: a wide 16:9 VIDEO clip (kind 'video' -> VIDEO_CLIP asset)
@@ -184,6 +193,27 @@ export class SceneGenerationService {
         externalId,
       });
       await this.record(projectId, sceneId, asset.id, 'submit', externalId, 'submitted', null, null);
+    } else {
+      // Reconciling a PRIOR submission (this asset already has an externalId
+      // from an earlier attempt). If that submission is older than the
+      // reconcile budget, the job is presumed permanently wedged on 69Labs'
+      // side (never reaching a terminal state) rather than just slow — give up
+      // on it and force a fresh resubmit instead of polling it forever. Without
+      // this, a truly stuck job loops: every retry re-polls the SAME dead
+      // externalId for another full GENERATION_POLL_TIMEOUT_SEC, times out, and
+      // repeats — burning all 6 BullMQ attempts without ever trying a new job.
+      const submittedAgoMs = Date.now() - Date.parse(asset.updated_at);
+      const reconcileBudgetMs = env.GENERATION_POLL_TIMEOUT_SEC * 1000 * RECONCILE_BUDGET_POLL_TIMEOUTS;
+      if (submittedAgoMs > reconcileBudgetMs) {
+        this.ctx.logger.error(
+          { projectId, sceneId, kind, externalId, submittedAgoMs },
+          '69labs job presumed wedged (exceeded reconcile budget); resubmitting fresh',
+        );
+        await this.ctx.repos.assets.clearGeneration(asset.id);
+        throw new ExternalServiceError('69labs', 'generation wedged: exceeded reconcile budget', {
+          retryable: true,
+        });
+      }
     }
 
     this.ctx.logger.info({ projectId, sceneId, kind, externalId }, 'awaiting 69labs generation');
