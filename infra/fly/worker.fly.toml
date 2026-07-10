@@ -17,7 +17,13 @@ dockerfile = "../docker/worker.Dockerfile"
 
 [env]
   NODE_ENV = "production"
-  WORKER_CONCURRENCY = "4"
+  # Scene generation is I/O-bound (each job just polls 69Labs), so this runs far
+  # above core count — the ceiling is 69Labs' per-account concurrency, not this
+  # VM. 12 lets a ~50-scene project generate in ~4 waves instead of ~13 at 4.
+  # If 69Labs starts returning 429s, dial this back toward their account limit.
+  WORKER_CONCURRENCY = "12"
+  # More parallel scene composites within a single render (see VM sizing below).
+  RENDER_COMPOSITE_CONCURRENCY = "4"
 
 # No [http_service]: the worker is not an HTTP app. It exposes a tiny health
 # server on 8080 for Fly checks only.
@@ -27,19 +33,29 @@ dockerfile = "../docker/worker.Dockerfile"
   # Never auto-stop: workers must stay alive to drain queues and recover jobs.
   auto_stop_machines = "off"
   auto_start_machines = false
-  min_machines_running = 1
+  # Two machines so two PROJECTS can render in parallel (rendering queue is
+  # concurrency-1 per machine). Keep in sync with `count` under [[vm]] below.
+  min_machines_running = 2
 
   [[services.tcp_checks]]
     interval = "15s"
     timeout = "5s"
     grace_period = "20s"
 
-# Rendering is CPU + memory heavy; give it room. Scale count for throughput.
+# Rendering is CPU + memory heavy; give it room. More cores directly shorten the
+# single render tail (parallel scene composites, faster libx264 mux). `count = 2`
+# adds a second machine for cross-PROJECT throughput — the rendering queue is
+# concurrency-1 per machine, so two machines render two different projects at
+# once (it does NOT speed up a single render). Keep min_machines_running in sync.
 [[vm]]
-  size = "performance-2x"
-  memory = "4gb"
+  size = "performance-4x"
+  memory = "8gb"
+  count = 2
 
-# Ephemeral scratch disk for FFmpeg asset download + render staging.
+# Ephemeral scratch disk for FFmpeg asset download + render staging. Each machine
+# gets its OWN volume from this named source — Fly volumes are NOT shared between
+# machines, so provision one per machine before deploying with count = 2:
+#   fly volumes create yulia_render_scratch --region lhr --size 20 --count 2
 [mounts]
   source = "yulia_render_scratch"
   destination = "/scratch"

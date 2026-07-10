@@ -136,11 +136,21 @@ export class PromptGenerationService {
     // Store both PiP layers in one prompt row: the background lives in the
     // top-level positive/negative fields; the overlay prompt + its aspect
     // ratio ride in `parameters` (consumed by the two-layer generation stage).
+    // `interstitialPrompt` is the SHARED recurring-establishing background used
+    // by full-frame (video-only) scenes — identical on every scene (derived
+    // from the project-wide anchors, not this scene) so those beats reuse one
+    // recurring look.
     const parameters: Json = {
       backgroundAspectRatio: PIP_LAYOUT.backgroundAspectRatio,
       overlayAspectRatio: PIP_LAYOUT.overlayAspectRatio,
       overlayPrompt: result.data.overlayPrompt,
       overlayNegativePrompt: mergeNegativePrompt(result.data.overlayNegativePrompt),
+      // Second rotated-overlay prompt for longer scenes (optional; falls back to
+      // the primary when absent). Same shared negative baseline.
+      ...(result.data.overlayPrompt2
+        ? { overlayPrompt2: result.data.overlayPrompt2 }
+        : {}),
+      interstitialPrompt: interstitialPrompt(shared.anchors),
       camera: result.data.camera,
       composition: result.data.composition,
       lighting: result.data.lighting,
@@ -184,6 +194,22 @@ export class PromptGenerationService {
       ),
     );
   }
+}
+
+/**
+ * Build the SHARED recurring-interstitial background prompt: a quiet, motion-
+ * light establishing shot bound to the project's continuity anchors so it reads
+ * as the same recurring world each time a full-frame breather scene appears.
+ * Deterministic (same anchors -> same string) so every scene stores the exact
+ * same value, and the generation stage's shared seed yields recurring footage.
+ */
+function interstitialPrompt(anchors: string[]): string {
+  const world = anchors.length ? ` featuring ${anchors.join(', ')}` : '';
+  return (
+    `Cinematic wide establishing shot of a serene, sunlit quiet-luxury interior${world}. ` +
+    `Soft natural window light, warm champagne-and-ivory palette, shallow depth of field, ` +
+    `slow gentle camera drift, calm and editorial. No people in frame, no text, no logos.`
+  );
 }
 
 function extractAnchors(continuityMemory: unknown): string[] {

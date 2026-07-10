@@ -32,6 +32,15 @@ export class SceneRepository {
     await this.sql`update scenes set status = ${status} where id = ${id}`;
   }
 
+  /**
+   * Change a scene's overlay treatment. Used to DEMOTE a product scene to
+   * full-frame video-only (VIDEO) when its overlay can't be produced, so the
+   * render composites it background-only instead of wedging the project.
+   */
+  async setVisualType(id: string, visualType: SceneVisualType): Promise<void> {
+    await this.sql`update scenes set visual_type = ${visualType} where id = ${id}`;
+  }
+
   async countByProject(projectId: string): Promise<number> {
     const rows = await this.sql<{ count: string }[]>`
       select count(*)::text as count from scenes where project_id = ${projectId}`;

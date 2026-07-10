@@ -82,5 +82,9 @@ export const ScenePromptSchema = z.object({
   // background — same world, wardrobe, and grade, tighter framing.
   overlayPrompt: z.string(),
   overlayNegativePrompt: z.string(),
+  // Optional SECOND overlay for longer scenes: a DIFFERENT complementary detail
+  // (another angle/object in the same world) that the overlay window rotates to
+  // mid-scene. Used only when the scene is long enough for two overlay slots.
+  overlayPrompt2: z.string().optional(),
 });
 export type ScenePromptOutput = z.infer<typeof ScenePromptSchema>;

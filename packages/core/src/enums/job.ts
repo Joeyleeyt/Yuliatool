@@ -44,7 +44,7 @@ export const QUEUE_RETRY_POLICY: Record<
   [QueueName.PROMPT_GENERATION]: { attempts: 4, backoffMs: 5_000 },
   [QueueName.VIDEO_GENERATION]: { attempts: 6, backoffMs: 15_000 },
   [QueueName.IMAGE_GENERATION]: { attempts: 6, backoffMs: 10_000 },
-  [QueueName.DOWNLOAD_ASSETS]: { attempts: 5, backoffMs: 5_000 },
+  [QueueName.DOWNLOAD_ASSETS]: { attempts: 3, backoffMs: 5_000 },
   [QueueName.RENDERING]: { attempts: 3, backoffMs: 20_000 },
   [QueueName.THUMBNAIL]: { attempts: 3, backoffMs: 10_000 },
 };

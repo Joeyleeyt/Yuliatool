@@ -6,7 +6,8 @@ import { AssetKind } from '../enums/asset.js';
  *
  *   projects/{projectId}/voiceover/{assetId}.{ext}
  *   projects/{projectId}/scenes/{sceneId}/clip.{ext}
- *   projects/{projectId}/scenes/{sceneId}/image.{ext}
+ *   projects/{projectId}/scenes/{sceneId}/image.{ext}        (overlay slot 0)
+ *   projects/{projectId}/scenes/{sceneId}/image_{slot}.{ext} (overlay slot 1+)
  *   projects/{projectId}/renders/{renderId}.mp4
  *   projects/{projectId}/tmp/{token}
  */
@@ -16,8 +17,13 @@ export const R2_PREFIX = {
     `projects/${projectId}/voiceover/${assetId}.${ext}`,
   sceneClip: (projectId: string, sceneId: string, ext: string) =>
     `projects/${projectId}/scenes/${sceneId}/clip.${ext}`,
-  sceneImage: (projectId: string, sceneId: string, ext: string) =>
-    `projects/${projectId}/scenes/${sceneId}/image.${ext}`,
+  // A scene may hold multiple overlay images (rotated within the scene). `slot`
+  // discriminates them; slot 0 keeps the legacy `image.{ext}` key so existing
+  // single-overlay assets still resolve.
+  sceneImage: (projectId: string, sceneId: string, ext: string, slot = 0) =>
+    slot === 0
+      ? `projects/${projectId}/scenes/${sceneId}/image.${ext}`
+      : `projects/${projectId}/scenes/${sceneId}/image_${slot}.${ext}`,
   render: (projectId: string, renderId: string) =>
     `projects/${projectId}/renders/${renderId}.mp4`,
   thumbnail: (projectId: string, renderId: string) =>

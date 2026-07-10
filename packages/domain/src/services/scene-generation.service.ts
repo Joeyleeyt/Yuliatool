@@ -3,6 +3,9 @@ import {
   ProjectStatus,
   QueueName,
   PIP_LAYOUT,
+  INTERSTITIAL_SEED_KEY,
+  sceneHasOverlay,
+  overlayCountForDuration,
   NotFoundError,
   ValidationError,
   ExternalServiceError,
@@ -72,13 +75,43 @@ export class SceneGenerationService {
     const prompt = await this.ctx.repos.prompts.getActiveByScene(sceneId);
     if (!prompt) throw new ValidationError('No active prompt for scene', { sceneId });
 
-    // Generate both layers concurrently. Each layer polls 69Labs independently
-    // and is idempotent (a retry only re-runs the layer that failed), so the
-    // scene's wall-clock time is max(video, image) rather than their sum.
-    await Promise.all([
-      this.runLayer(projectId, sceneId, 'video', this.backgroundRequest(projectId, sceneId, prompt)),
-      this.runLayer(projectId, sceneId, 'image', this.overlayRequest(projectId, sceneId, prompt)),
-    ]);
+    // Overlay treatment (decided at segmentation, stored on the scene):
+    //   IMAGE -> product beat: unique background + a portrait overlay window.
+    //   VIDEO -> full-frame breather: background only (NO overlay), and the
+    //            background uses the SHARED interstitial seed/prompt so all such
+    //            scenes recur the same establishing look (background reuse).
+    const hasOverlay = sceneHasOverlay(scene.visual_type);
+
+    // Generate the required layer(s) concurrently. Each layer polls 69Labs
+    // independently and is idempotent (a retry only re-runs the layer that
+    // failed), so a scene's wall-clock is max over its layers.
+    const layers: Promise<void>[] = [
+      this.runLayer(
+        projectId,
+        sceneId,
+        'video',
+        0,
+        this.backgroundRequest(projectId, sceneId, prompt, hasOverlay),
+      ),
+    ];
+    if (hasOverlay) {
+      // Product scenes rotate 1–2 overlay images (each on screen ~5–8s), so a
+      // longer scene gets a second, distinct overlay. Generate one IMAGE asset
+      // per slot with its own prompt + seed.
+      const overlayCount = overlayCountForDuration(scene.duration_sec);
+      for (let slot = 0; slot < overlayCount; slot++) {
+        layers.push(
+          this.runLayer(
+            projectId,
+            sceneId,
+            'image',
+            slot,
+            this.overlayRequest(projectId, sceneId, prompt, slot),
+          ),
+        );
+      }
+    }
+    await Promise.all(layers);
 
     await this.ctx.jobs.dispatch(
       QueueName.DOWNLOAD_ASSETS,
@@ -88,15 +121,24 @@ export class SceneGenerationService {
     this.ctx.logger.info({ projectId, sceneId }, 'scene layers generated; download dispatched');
   }
 
-  /** Ensure one layer's asset reaches `generated` (or is already stored). */
+  /**
+   * Ensure one layer's asset reaches `generated` (or is already stored). `slot`
+   * is the rotation index for overlay images (0 for the background and the first
+   * overlay); it's persisted in the asset's `metadata.slot` so download/render
+   * can address each overlay independently.
+   */
   private async runLayer(
     projectId: string,
     sceneId: string,
     kind: GenerationKind,
+    slot: number,
     req: GenerationRequest,
   ): Promise<void> {
     const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-    let asset = await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
+    let asset =
+      assetKind === AssetKind.IMAGE
+        ? await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot)
+        : await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
     if (asset?.status === 'stored') return; // fully done
     if (!asset) {
       asset = await this.ctx.repos.assets.create({
@@ -105,6 +147,7 @@ export class SceneGenerationService {
         kind: assetKind,
         status: 'pending',
         contentType: CONTENT_TYPE[kind],
+        ...(assetKind === AssetKind.IMAGE ? { metadata: { slot } } : {}),
       });
     }
     if (asset.status === 'generated' && asset.source_url) return; // awaiting download
@@ -141,29 +184,68 @@ export class SceneGenerationService {
     await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'completed', result.costUsd, null);
   }
 
-  /** Background layer: the scene's primary (positive/negative) prompt, wide 16:9. */
-  private backgroundRequest(projectId: string, sceneId: string, prompt: PromptRow): GenerationRequest {
+  /**
+   * Background layer, wide 16:9.
+   *  - Product scenes (hasOverlay): the scene's own unique background prompt +
+   *    a per-scene seed, so each product beat looks distinct.
+   *  - Video-only scenes: the SHARED interstitial prompt + a project-wide
+   *    interstitial seed (no sceneId), so every full-frame breather recurs the
+   *    same establishing look — background reuse without an asset-dedup change.
+   */
+  private backgroundRequest(
+    projectId: string,
+    sceneId: string,
+    prompt: PromptRow,
+    hasOverlay: boolean,
+  ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
+    const aspectRatio = asString(params.backgroundAspectRatio, PIP_LAYOUT.backgroundAspectRatio);
+    if (hasOverlay) {
+      return {
+        prompt: prompt.positive_prompt,
+        ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
+        aspectRatio,
+        seed: seedFrom(projectId, sceneId, 'video'),
+      };
+    }
+    // Shared recurring interstitial: same prompt + same seed across all
+    // video-only scenes (falls back to this scene's prompt for projects
+    // prompted before the interstitial field existed).
+    const interstitial = asString(params.interstitialPrompt, prompt.positive_prompt);
     return {
-      prompt: prompt.positive_prompt,
+      prompt: interstitial,
       ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
-      aspectRatio: asString(params.backgroundAspectRatio, PIP_LAYOUT.backgroundAspectRatio),
-      seed: seedFrom(projectId, sceneId, 'video'),
+      aspectRatio,
+      seed: seedFrom(projectId, INTERSTITIAL_SEED_KEY, 'video'),
     };
   }
 
-  /** Overlay layer: the complementary portrait prompt stored in `parameters`. */
-  private overlayRequest(projectId: string, sceneId: string, prompt: PromptRow): GenerationRequest {
+  /**
+   * Overlay layer for rotation `slot`. Slot 0 uses `overlayPrompt`; slot 1 uses
+   * the distinct `overlayPrompt2` (falling back to the primary if the model
+   * didn't provide one). The seed is slot-distinct so the two overlays differ.
+   */
+  private overlayRequest(
+    projectId: string,
+    sceneId: string,
+    prompt: PromptRow,
+    slot: number,
+  ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
     // Fall back to the background prompt for projects prompted before the
     // two-layer format existed.
-    const overlayPrompt = asString(params.overlayPrompt, prompt.positive_prompt);
+    const primary = asString(params.overlayPrompt, prompt.positive_prompt);
+    const overlayPrompt = slot === 0 ? primary : asString(params.overlayPrompt2, primary);
     const overlayNegative = asString(params.overlayNegativePrompt, '');
     return {
       prompt: overlayPrompt,
       ...(overlayNegative ? { negativePrompt: overlayNegative } : {}),
       aspectRatio: asString(params.overlayAspectRatio, PIP_LAYOUT.overlayAspectRatio),
-      seed: seedFrom(projectId, sceneId, 'image'),
+      // Slot in the seed so each overlay is a distinct image (slot 0 keeps the
+      // original single-overlay seed for continuity with pre-rotation projects).
+      seed: slot === 0
+        ? seedFrom(projectId, sceneId, 'image')
+        : seedFrom(projectId, sceneId, 'image', String(slot)),
     };
   }
 

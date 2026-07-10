@@ -32,12 +32,18 @@ export async function renderVideo(input: RenderInput): Promise<RenderOutput> {
     const targetLen = isLast ? seg.displayDurationSec : seg.displayDurationSec + T;
     const out = join(workDir, `scene_${String(i).padStart(4, '0')}.mp4`);
 
-    await compositeScene(seg.backgroundPath, seg.overlayPath, seg.overlaySide, out, {
-      width,
-      height,
-      fps,
-      durationSec: targetLen,
-    });
+    const titleCard =
+      seg.titleText && seg.itemNumber
+        ? { itemNumber: seg.itemNumber, titleText: seg.titleText }
+        : undefined;
+    await compositeScene(
+      seg.backgroundPath,
+      seg.overlayPaths,
+      seg.overlaySide,
+      out,
+      { width, height, fps, durationSec: targetLen },
+      titleCard,
+    );
 
     done += 1;
     input.onProgress?.({ percent: Math.round((done / N) * 70), stage: 'normalize' });

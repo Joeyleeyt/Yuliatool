@@ -48,10 +48,16 @@ export function segmentationUser(units: TranscriptUnit[], styleGuideJson: string
     `TRANSCRIPT UNITS (index, time range, text):\n${unitLines}\n\n` +
     `Group CONTIGUOUS units into scenes. Each scene is a continuous range ` +
     `[startIndex..endIndex] with NO gaps or overlaps; together the scenes must cover ALL units ` +
-    `in order. Target ~${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max} seconds of narration ` +
-    `per scene (use the timestamps). For each scene give: title, summary, visualIntent, subject, ` +
-    `environment, mood, and continuityNotes that explicitly reference the anchors so the ` +
-    `sequence stays visually consistent. Each scene must be visually self-contained.`
+    `in order (use the timestamps for length).\n\n` +
+    `CADENCE — target ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max} seconds of narration ` +
+    `per scene (aim ~${SEGMENT_WINDOW_SEC.target}s). Do NOT return a few giant topic scenes: cut ` +
+    `each topic into several ${SEGMENT_WINDOW_SEC.min}-${SEGMENT_WINDOW_SEC.max}s beats. A ` +
+    `10-minute video should yield roughly 40-60 scenes. (Any scene longer than ` +
+    `${SEGMENT_WINDOW_SEC.split}s is automatically split downstream, so keep them tight.)\n\n` +
+    `For each scene give: title, summary, visualIntent, subject, environment, mood, and ` +
+    `continuityNotes that explicitly reference the anchors so the sequence stays visually ` +
+    `consistent. Group scenes that belong to the same topic under the SAME title so the ` +
+    `pipeline can number them as one listicle item. Each scene must be visually self-contained.`
   );
 }
 
@@ -67,10 +73,11 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `prompts per scene:\n` +
     `1) BACKGROUND — a wide, 16:9, ~8-second cinematic lifestyle/establishing VIDEO clip with ` +
     `gentle motion (dolly, push-in, parallax, drifting light, flowing fabric).\n` +
-    `2) OVERLAY — a 4:5 portrait still IMAGE: a tight detail or product shot (texture, hands, ` +
-    `object, fabric, grooming) that lives in the SAME world, wardrobe, and color grade as the ` +
-    `background but with tighter, editorial framing.\n` +
-    `The two must never contradict each other. Produce extremely cinematic, richly detailed ` +
+    `2) OVERLAY — 4:5 portrait still IMAGE(s): tight detail or product shots (texture, hands, ` +
+    `object, fabric, grooming) that live in the SAME world, wardrobe, and color grade as the ` +
+    `background but with tighter, editorial framing. Provide a primary overlay and a second, ` +
+    `DIFFERENT complementary detail (the window rotates between them on longer scenes).\n` +
+    `The layers must never contradict each other. Produce extremely cinematic, richly detailed ` +
     `prompts. Respond ONLY with the structured JSON.`
   );
 }
@@ -121,8 +128,10 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
     `Then, for the OVERLAY window: overlayPrompt (a portrait 4:5 detail/product still in the ` +
     `same world and grade — tighter framing, a complementary subject, not a repeat of the ` +
-    `background) and overlayNegativePrompt. Keep the elegant, high-end, soft-luxury editorial ` +
-    `aesthetic throughout.`
+    `background) and overlayNegativePrompt. Also provide overlayPrompt2: a SECOND, DIFFERENT ` +
+    `complementary detail in the same world/grade (another object, angle, or texture — not a ` +
+    `repeat of overlayPrompt) that the overlay window rotates to on longer scenes. Keep the ` +
+    `elegant, high-end, soft-luxury editorial aesthetic throughout.`
   );
 }
 

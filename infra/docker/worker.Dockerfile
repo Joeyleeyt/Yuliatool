@@ -43,10 +43,26 @@ ENV NODE_ENV=production
 # exactly which build is running.
 ARG BUILD_DATE=unknown
 ENV BUILD_DATE=${BUILD_DATE}
-# FFmpeg + fonts (for future text overlays) from Debian repos.
+# FFmpeg + fonts. DejaVu (fonts-dejavu-core) is the always-present serif fallback
+# for title cards; ffmpeg itself is the only hard requirement here. Keep this
+# layer free of any network dependency beyond the Debian mirror so the build
+# can't fail on a third-party fetch.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Cinzel is the preferred elegant serif for numbered title cards (see
+# packages/ffmpeg/src/fonts.ts). It's fetched from Google Fonts' GitHub mirror,
+# but this is a BEST-EFFORT step: if the download fails or the upstream path
+# moves, `|| true` keeps the build green and titleCardFont() falls back to the
+# DejaVu serif installed above. Isolated in its own layer so a network blip here
+# never invalidates or aborts the apt layer.
+RUN mkdir -p /usr/share/fonts/truetype/cinzel \
+    && ( curl -fsSL --retry 3 --retry-delay 2 -o /usr/share/fonts/truetype/cinzel/Cinzel-SemiBold.ttf \
+         https://github.com/google/fonts/raw/main/ofl/cinzel/static/Cinzel-SemiBold.ttf \
+       || echo 'WARN: Cinzel font fetch failed; title cards will use DejaVu serif' ) \
+    && fc-cache -f \
+    && apt-get purge -y curl && apt-get autoremove -y || true
 RUN groupadd -r nodejs && useradd -r -g nodejs worker && \
     mkdir -p /scratch && chown worker:nodejs /scratch
 COPY --from=build --chown=worker:nodejs /app/deploy ./

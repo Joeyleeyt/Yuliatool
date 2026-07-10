@@ -7,6 +7,7 @@ import {
   AssetKind,
   ProjectStatus,
   overlaySide,
+  sceneHasOverlay,
   mapLimit,
   NotFoundError,
   ValidationError,
@@ -177,26 +178,43 @@ export class RenderService {
     audioDurationSec: number,
     workDir: string,
   ): Promise<RenderSegment[]> {
+    // Derive the listicle item number + title-card scene up front (mapLimit runs
+    // concurrently, so a running counter inside it would race). A new item begins
+    // at the first scene and whenever the scene title changes; the title card is
+    // burned only on that first scene of the item.
+    const itemMeta = computeItemMeta(scenes);
+
     // Stage every scene's two layers concurrently (bounded) instead of scene-by-
     // scene serial DB lookups + R2 GETs — this is pure I/O dead time at the head
     // of the render. Order is preserved so segments line up with the timeline.
     return mapLimit(scenes, env.RENDER_DOWNLOAD_CONCURRENCY, async (scene, i) => {
       const pad = String(i).padStart(4, '0');
 
-      // Each scene has two layers: a background video + an overlay image.
-      const [bg, overlay] = await Promise.all([
-        this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP),
-        this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.IMAGE),
-      ]);
+      // Product beats have a background + 1–2 rotated overlays; video-only beats
+      // are full-frame background only (no overlay was generated).
+      const hasOverlay = sceneHasOverlay(scene.visual_type);
+      const bg = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP);
       if (!bg?.r2_key) throw new ValidationError('Scene background missing', { sceneId: scene.id });
-      if (!overlay?.r2_key) throw new ValidationError('Scene overlay missing', { sceneId: scene.id });
 
       const backgroundPath = join(workDir, `bg_${pad}`);
-      const overlayPath = join(workDir, `ov_${pad}`);
-      await Promise.all([
-        this.download(bg.r2_key, backgroundPath),
-        this.download(overlay.r2_key, overlayPath),
-      ]);
+      const downloads = [this.download(bg.r2_key, backgroundPath)];
+
+      // Download every stored overlay slot in rotation order. A demoted scene
+      // (visual_type flipped to VIDEO) has none; a product scene has 1–2.
+      const overlayPaths: string[] = [];
+      if (hasOverlay) {
+        const overlays = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE)).filter(
+          (o) => o.status === 'stored' && o.r2_key,
+        );
+        if (overlays.length === 0)
+          throw new ValidationError('Scene overlay missing', { sceneId: scene.id });
+        overlays.forEach((overlay, slot) => {
+          const p = join(workDir, `ov_${pad}_${slot}`);
+          overlayPaths.push(p);
+          downloads.push(this.download(overlay.r2_key!, p));
+        });
+      }
+      await Promise.all(downloads);
 
       // Tile the timeline by scene start times so inter-scene pauses are covered
       // and video length matches the continuous voiceover.
@@ -204,11 +222,14 @@ export class RenderService {
       const displayEnd = next ? next.start_sec : audioDurationSec;
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
+      const meta = itemMeta[i]!;
       return {
         backgroundPath,
-        overlayPath,
+        overlayPaths, // empty for full-frame video-only scenes
         overlaySide: overlaySide(scene.scene_index),
         displayDurationSec,
+        // Only the first scene of each item carries the title card.
+        ...(meta.showCard ? { titleText: meta.titleText, itemNumber: meta.itemNumber } : {}),
       };
     });
   }
@@ -217,4 +238,38 @@ export class RenderService {
     const stream = await this.ctx.storage.getObjectStream(key);
     await pipeline(stream, createWriteStream(dest));
   }
+}
+
+interface ItemMeta {
+  /** Whether this scene is the first of its item (and thus shows the title card). */
+  showCard: boolean;
+  /** 1-based item ordinal, defined only on the first scene of the item. */
+  itemNumber?: number;
+  /** Display title for the card, defined only on the first scene of the item. */
+  titleText?: string;
+}
+
+/**
+ * Assign each scene an item ordinal + title-card flag. A new listicle item
+ * starts at the first scene and whenever the (trimmed) title changes from the
+ * previous scene, so one item can span several scenes. The card is shown only
+ * on the item's first scene, and only when it has a non-empty title.
+ */
+function computeItemMeta(scenes: SceneRow[]): ItemMeta[] {
+  const out: ItemMeta[] = [];
+  let itemNumber = 0;
+  let prevTitle: string | null = null;
+
+  for (const scene of scenes) {
+    const title = (scene.title ?? '').trim();
+    const isNewItem = out.length === 0 || title !== prevTitle;
+    if (isNewItem) {
+      itemNumber += 1;
+      prevTitle = title;
+      out.push(title ? { showCard: true, itemNumber, titleText: title } : { showCard: false });
+    } else {
+      out.push({ showCard: false });
+    }
+  }
+  return out;
 }

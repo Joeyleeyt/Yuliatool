@@ -73,8 +73,10 @@ const EnvSchema = z.object({
   GENERATION_POLL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1200),
   // How often the generation stage polls 69Labs for a result. Lower = less dead
   // time waiting on an already-finished job, at the cost of more (cheap) status
-  // GETs. Tunable without a redeploy.
-  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(4),
+  // GETs. Tunable without a redeploy. 2s trims up to ~2s of idle per scene vs 4s;
+  // across ~50 scenes that's real wall-clock for a negligible number of extra
+  // GETs. Raise it back toward 4 if 69Labs rate-limits status polls.
+  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
   // many-scene project doesn't burst past OpenAI rate limits.
   PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
@@ -85,6 +87,10 @@ const EnvSchema = z.object({
   RENDER_COMPOSITE_CONCURRENCY: z.coerce.number().int().positive().default(2),
   // Max concurrent R2 asset downloads when staging a render locally.
   RENDER_DOWNLOAD_CONCURRENCY: z.coerce.number().int().positive().default(6),
+  // Absolute path to the serif .ttf/.otf used for numbered title cards. Unset
+  // -> the worker image's bundled Cinzel path. Set for local rendering on a
+  // machine without that font installed.
+  TITLE_CARD_FONT: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

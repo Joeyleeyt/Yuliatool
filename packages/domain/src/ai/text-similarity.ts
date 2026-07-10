@@ -1,0 +1,63 @@
+/**
+ * Tiny, dependency-free text similarity used to pick a stand-in scene when a
+ * scene's own background can't be produced: we reuse the background of the
+ * already-generated scene whose narration is closest, so the borrowed visual
+ * still matches what's being said at that moment.
+ *
+ * Token Jaccard over stopword-filtered, lowercased words. This is deliberately
+ * simple (no embeddings/model call): the fallback runs inline in the download
+ * stage and only needs a "good enough" nearest neighbour among a handful of
+ * scenes.
+ */
+
+const STOPWORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'of', 'to', 'in', 'on', 'at', 'by',
+  'for', 'with', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'it',
+  'its', 'this', 'that', 'these', 'those', 'you', 'your', 'yours', 'i', 'we',
+  'they', 'them', 'their', 'he', 'she', 'his', 'her', 'my', 'me', 'so', 'do',
+  'does', 'did', 'not', 'no', 'yes', 'can', 'will', 'just', 'how', 'what', 'when',
+  'from', 'into', 'out', 'up', 'down', 'over', 'about', 'than', 'then', 'too',
+]);
+
+/** Lowercase, split on non-letters, drop stopwords + very short tokens. */
+function tokenize(text: string): Set<string> {
+  const tokens = text
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+  return new Set(tokens);
+}
+
+/**
+ * Jaccard similarity of two texts' significant-word sets, in [0, 1].
+ * 0 when either side has no significant tokens.
+ */
+export function narrationSimilarity(a: string, b: string): number {
+  const sa = tokenize(a);
+  const sb = tokenize(b);
+  if (sa.size === 0 || sb.size === 0) return 0;
+  let intersection = 0;
+  for (const t of sa) if (sb.has(t)) intersection += 1;
+  const union = sa.size + sb.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Pick, from `candidates`, the item whose `text` is most similar to `target`.
+ * Returns null if no candidate has any positive similarity (nothing relevant to
+ * borrow). Ties resolve to the earliest candidate for determinism.
+ */
+export function mostSimilar<T>(
+  target: string,
+  candidates: readonly T[],
+  textOf: (c: T) => string,
+): { item: T; score: number } | null {
+  let best: { item: T; score: number } | null = null;
+  for (const c of candidates) {
+    const score = narrationSimilarity(target, textOf(c));
+    if (score > 0 && (best === null || score > best.score)) {
+      best = { item: c, score };
+    }
+  }
+  return best;
+}

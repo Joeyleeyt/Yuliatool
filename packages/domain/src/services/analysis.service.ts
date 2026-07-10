@@ -5,7 +5,8 @@ import {
   ValidationError,
   AnalysisSchema,
   SegmentationSchema,
-  visualTypeForIndex,
+  SEGMENT_WINDOW_SEC,
+  overlayTreatmentForScene,
   env,
   type SegmentScene,
 } from '@yulia/core';
@@ -134,33 +135,50 @@ export class AnalysisService {
   }
 }
 
+/** A contiguous transcript-unit range that will become one persisted scene. */
+interface SceneSpan {
+  startIdx: number;
+  endIdx: number;
+  seg: SegmentScene;
+}
+
 /**
- * Convert LLM scene groupings into persistable scenes: clamp indices to valid
- * units, derive real timings, assign the alternating visual type, and reindex.
+ * Convert LLM scene groupings into persistable scenes. The model returns coarse
+ * topic ranges; here we (1) clamp + order them, (2) HARD-SPLIT any range longer
+ * than SEGMENT_WINDOW_SEC.split into ~target-second sub-scenes so the cadence is
+ * enforced regardless of what the model returned, then (3) derive real timings
+ * and assign the overlay treatment over the final expanded list.
  */
 function buildScenes(units: TranscriptUnit[], segScenes: SegmentScene[]): NewScene[] {
   const maxIdx = units.length - 1;
   const ordered = [...segScenes].sort((a, b) => a.startIndex - b.startIndex);
 
-  return ordered.map((s, i): NewScene => {
-    let startIdx = clamp(s.startIndex, 0, maxIdx);
-    let endIdx = clamp(s.endIndex, 0, maxIdx);
+  // Pass 1: normalize ranges and split oversized ones into sub-spans.
+  const spans: SceneSpan[] = [];
+  for (const seg of ordered) {
+    let startIdx = clamp(seg.startIndex, 0, maxIdx);
+    let endIdx = clamp(seg.endIndex, 0, maxIdx);
     if (endIdx < startIdx) [startIdx, endIdx] = [endIdx, startIdx];
+    spans.push(...splitSpan(units, startIdx, endIdx, seg));
+  }
 
-    const startSec = units[startIdx]!.start;
-    const endSec = units[endIdx]!.end;
+  // Pass 2: materialize each span, assigning visual type over the FINAL list so
+  // first/last (and the every-Nth breather rule) are computed post-split.
+  return spans.map((span, i): NewScene => {
+    const startSec = units[span.startIdx]!.start;
+    const endSec = units[span.endIdx]!.end;
     const durationSec = Math.max(0.5, Number((endSec - startSec).toFixed(3)));
     const narration = units
-      .slice(startIdx, endIdx + 1)
+      .slice(span.startIdx, span.endIdx + 1)
       .map((u) => u.text)
       .join(' ');
-    const visualType = visualTypeForIndex(i);
+    const visualType = overlayTreatmentForScene(i, spans.length, narration);
 
     const visualBrief: Json = {
-      visualIntent: s.visualIntent,
-      subject: s.subject,
-      environment: s.environment,
-      mood: s.mood,
+      visualIntent: span.seg.visualIntent,
+      subject: span.seg.subject,
+      environment: span.seg.environment,
+      mood: span.seg.mood,
     };
 
     return {
@@ -169,13 +187,56 @@ function buildScenes(units: TranscriptUnit[], segScenes: SegmentScene[]): NewSce
       startSec,
       endSec: Math.max(endSec, startSec),
       durationSec,
-      title: s.title,
-      summary: s.summary,
+      title: span.seg.title,
+      summary: span.seg.summary,
       narrationText: narration,
       visualBrief,
-      continuityNotes: s.continuityNotes,
+      continuityNotes: span.seg.continuityNotes,
     };
   });
+}
+
+/**
+ * Split a unit range [startIdx..endIdx] into contiguous sub-spans each aiming
+ * for ~SEGMENT_WINDOW_SEC.target seconds, so no scene exceeds `.split`. Splits
+ * happen at unit boundaries (timings stay grounded, no gaps/overlaps). A range
+ * already within the bound is returned as a single span. All sub-spans inherit
+ * the parent segment's title/summary/brief (they're the same topic beat).
+ */
+function splitSpan(
+  units: TranscriptUnit[],
+  startIdx: number,
+  endIdx: number,
+  seg: SegmentScene,
+): SceneSpan[] {
+  const total = units[endIdx]!.end - units[startIdx]!.start;
+  if (total <= SEGMENT_WINDOW_SEC.split || endIdx <= startIdx) {
+    return [{ startIdx, endIdx, seg }];
+  }
+
+  const parts = Math.max(2, Math.ceil(total / SEGMENT_WINDOW_SEC.target));
+  const spans: SceneSpan[] = [];
+  let cursor = startIdx;
+  for (let p = 0; p < parts && cursor <= endIdx; p++) {
+    // Grow the chunk unit-by-unit until it reaches the target length, leaving at
+    // least one unit for each remaining part so we don't overrun the range.
+    const chunkStartSec = units[cursor]!.start;
+    let last = cursor;
+    const maxLastForPart = endIdx - (parts - 1 - p); // reserve units for later parts
+    while (
+      last < maxLastForPart &&
+      units[last]!.end - chunkStartSec < SEGMENT_WINDOW_SEC.target
+    ) {
+      last++;
+    }
+    // Final part always extends to the end.
+    if (p === parts - 1) last = endIdx;
+    spans.push({ startIdx: cursor, endIdx: last, seg });
+    cursor = last + 1;
+  }
+  // Any leftover units (rounding) fold into the last span.
+  if (cursor <= endIdx && spans.length > 0) spans[spans.length - 1]!.endIdx = endIdx;
+  return spans;
 }
 
 function clamp(v: number, min: number, max: number): number {

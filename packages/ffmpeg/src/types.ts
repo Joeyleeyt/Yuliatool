@@ -3,12 +3,23 @@ import type { OverlaySide } from '@yulia/core';
 export interface RenderSegment {
   /** Local path to the wide 16:9 background video clip. */
   backgroundPath: string;
-  /** Local path to the portrait overlay still (the PiP "window"). */
-  overlayPath: string;
+  /**
+   * Local paths to the portrait overlay stills (the PiP "window"), in rotation
+   * order. Empty for full-frame, video-only "breather" scenes. When it has 2+
+   * entries the window rotates through them within the scene (~5–8s each).
+   */
+  overlayPaths: string[];
   /** Which side the overlay window sits on for this scene. */
   overlaySide: OverlaySide;
   /** On-screen duration this segment must occupy for audio sync. */
   displayDurationSec: number;
+  /**
+   * Listicle item title (e.g. "Signature Scent"), set ONLY on the first scene
+   * of each numbered item. When present, a title card is burned lower-left.
+   */
+  titleText?: string;
+  /** The item's ordinal (1-based), rendered as "#N". Paired with titleText. */
+  itemNumber?: number;
 }
 
 export interface RenderProgress {
