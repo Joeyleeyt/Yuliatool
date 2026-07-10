@@ -191,7 +191,25 @@ export class SceneGenerationService {
 
     if (result.status === 'failed') {
       await this.ctx.repos.assets.clearGeneration(asset.id);
-      await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'failed', null, result.error);
+      // 69Labs doesn't always populate a clean `error` string on failure — log
+      // and persist the full raw response so a bare "failed: unknown" is
+      // diagnosable (from Fly logs immediately, or generation_history.response
+      // later) instead of silently discarded.
+      this.ctx.logger.error(
+        { projectId, sceneId, kind, externalId, raw: result.raw },
+        '69labs generation failed',
+      );
+      await this.record(
+        projectId,
+        sceneId,
+        asset.id,
+        'poll',
+        externalId,
+        'failed',
+        null,
+        result.error,
+        result.raw,
+      );
       throw new ExternalServiceError('69labs', `generation failed: ${result.error ?? 'unknown'}`, {
         retryable: true,
       });
@@ -297,6 +315,7 @@ export class SceneGenerationService {
     status: string,
     costUsd: number | null,
     error: string | null,
+    raw?: unknown,
   ): Promise<void> {
     await this.ctx.repos.generationHistory.record({
       projectId,
@@ -307,6 +326,10 @@ export class SceneGenerationService {
       externalId,
       status,
       costUsd,
+      // The full 69Labs response, kept alongside `error` since that field is
+      // sometimes empty/non-string on failure — this is then the only record
+      // of why a generation actually failed.
+      ...(raw !== undefined ? { response: raw as unknown as Json } : {}),
       ...(error ? { error: { message: error } as unknown as Json } : {}),
     });
   }
