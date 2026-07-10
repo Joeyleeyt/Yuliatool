@@ -1,5 +1,5 @@
-import type { Job, Processor } from 'bullmq';
-import { QueueName, createLogger } from '@yulia/core';
+import { UnrecoverableError, type Job, type Processor } from 'bullmq';
+import { QueueName, createLogger, isRetryable } from '@yulia/core';
 import { PAYLOAD_SCHEMAS, type QueuePayloadMap } from '@yulia/queue';
 import { ProjectService, type AppContext } from '@yulia/domain';
 import type { Json } from '@yulia/db';
@@ -48,13 +48,20 @@ export function defineProcessor<Q extends QueueName>(
       await ctx.jobs.markCompleted(key);
       log.info({ jobId: key, ms: Date.now() - startedAt }, 'job completed');
     } catch (err) {
+      // An error the handler marked non-retryable (e.g. NotFoundError for a
+      // project deleted mid-run) must not keep retrying just because BullMQ's
+      // own `attempts` budget isn't exhausted yet — without this, a deleted
+      // project's in-flight job (skipped by purgeProject because it was
+      // active/locked at delete time) burns all 6 attempts with backoff
+      // instead of failing on the first one.
+      const nonRetryable = !isRetryable(err);
       const attemptsAllowed = job.opts.attempts ?? 1;
-      const isFinal = job.attemptsMade + 1 >= attemptsAllowed;
+      const isFinal = nonRetryable || job.attemptsMade + 1 >= attemptsAllowed;
       const errorJson = serializeError(err);
 
       await ctx.jobs.recordFailure(key, errorJson as unknown as Json, isFinal);
       log.error(
-        { jobId: key, attempt: job.attemptsMade + 1, attemptsAllowed, isFinal, err },
+        { jobId: key, attempt: job.attemptsMade + 1, attemptsAllowed, isFinal, nonRetryable, err },
         'job failed',
       );
 
@@ -67,6 +74,12 @@ export function defineProcessor<Q extends QueueName>(
             .catch((e: unknown) => log.error({ e }, 'failed to mark project FAILED'));
         }
       }
+
+      // UnrecoverableError tells BullMQ to move the job straight to `failed`
+      // regardless of remaining attempts — the natural way to express "this
+      // is done retrying" for a non-retryable error without also stopping a
+      // genuinely-retryable one on its last attempt (which reaches isFinal too).
+      if (nonRetryable) throw new UnrecoverableError(errorJson.message);
       throw err; // hand back to BullMQ for retry/backoff bookkeeping
     }
   };
