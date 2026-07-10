@@ -8,6 +8,7 @@
     "dev": "tsx watch --env-file=../../.env src/main.ts",
     "recover": "tsx --env-file=../../.env src/scripts/recover-project.ts",
     "resegment": "tsx --env-file=../../.env src/scripts/resegment-project.ts",
+    "clear-queues": "tsx --env-file=../../.env src/scripts/clear-queues.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

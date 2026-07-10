@@ -70,13 +70,19 @@ const EnvSchema = z.object({
   // 69Labs' own per-account queue, not this machine. 12 lets a typical project's
   // scenes generate in one or two waves instead of 4-at-a-time.
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(12),
+  // How long an idle BullMQ worker blocks waiting for a job before re-polling
+  // Redis. Higher = far fewer Redis commands when queues are empty (each of the
+  // 7 queues × N machines otherwise re-polls every few seconds 24/7), which
+  // matters on metered Redis (Upstash per-command billing/caps). A waiting
+  // worker is woken immediately when a job is enqueued, so this adds NO latency
+  // to active work — it only throttles empty-queue polling. Default 30s.
+  WORKER_DRAIN_DELAY_SEC: z.coerce.number().int().positive().default(30),
   GENERATION_POLL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1200),
-  // How often the generation stage polls 69Labs for a result. Lower = less dead
-  // time waiting on an already-finished job, at the cost of more (cheap) status
-  // GETs. Tunable without a redeploy. 2s trims up to ~2s of idle per scene vs 4s;
-  // across ~50 scenes that's real wall-clock for a negligible number of extra
-  // GETs. Raise it back toward 4 if 69Labs rate-limits status polls.
-  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
+  // How often the generation stage polls 69Labs for a result. Each poll also
+  // touches Redis (job state), so on metered Redis a very low interval is costly.
+  // 5s balances low dead-time against Redis + status-GET volume. Lower only if
+  // Redis is unmetered; raise if 69Labs rate-limits status polls.
+  GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(5),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
   // many-scene project doesn't burst past OpenAI rate limits.
   PROMPT_GENERATION_CONCURRENCY: z.coerce.number().int().positive().default(8),
