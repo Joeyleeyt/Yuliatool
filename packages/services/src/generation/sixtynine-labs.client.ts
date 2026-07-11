@@ -69,6 +69,24 @@ const CONCURRENCY_LIMIT_MAX_RETRIES = 2;
 const CONCURRENCY_LIMIT_DELAY_MS = 8_000;
 const CONCURRENCY_LIMIT_MESSAGE = /concurrent .* generation limit reached/i;
 
+/**
+ * 69Labs also enforces a TIME-WINDOW credit quota (distinct from both the
+ * per-minute 429 and the concurrent-job 403 above) — e.g. an "Hourly video
+ * credit limit exceeded" / "Daily ... limit" 403 with code FORBIDDEN. This is a
+ * quota that RESETS on a clock boundary, not a permanent "out of credits" error,
+ * so it must be treated as RETRYABLE — otherwise a single hourly-limit hit kills
+ * the scene's job (UnrecoverableError) and, via the processor wrapper, FAILS THE
+ * WHOLE PROJECT on the first attempt (client-reported bug).
+ *
+ * The reset window is long (up to an hour), far beyond what an in-process wait
+ * can bridge without holding the worker slot, so we do NOT spin here. We surface
+ * it as retryable and let BullMQ's VIDEO/IMAGE_GENERATION policy (6 attempts,
+ * exponential backoff) space the resubmits out, freeing this worker's slot
+ * between attempts so other scenes proceed. `Retry-After`, when present, is
+ * honored by the caller-visible error so an operator/monitor can see the window.
+ */
+const CREDIT_LIMIT_MESSAGE = /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i;
+
 export class SixtyNineLabsClient {
   constructor(
     private readonly apiKey: string = env.SIXTYNINE_LABS_API_KEY,
@@ -173,10 +191,16 @@ export class SixtyNineLabsClient {
             await sleep(concurrencyLimitDelayMs(attempt));
             continue;
           }
-          // 4xx = our fault (bad params / no credits), don't retry; 5xx + 429 +
-          // the concurrent-job-limit 403 are transient (BullMQ retries them).
+          // A time-window credit-quota 403 ("Hourly ... credit limit exceeded")
+          // is TRANSIENT — it resets on a clock boundary. We don't spin
+          // in-process (the window is too long); we surface it as retryable so
+          // BullMQ backs off and resubmits, and free this slot meanwhile.
+          const isCreditLimit = res.status === 403 && CREDIT_LIMIT_MESSAGE.test(text);
+          // 4xx = our fault (bad params, or a HARD "out of credits"), don't
+          // retry; 5xx + 429 + the concurrent-job 403 + the time-window credit
+          // 403 are transient (BullMQ retries them).
           throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
-            retryable: res.status >= 500 || res.status === 429 || isConcurrencyLimit,
+            retryable: res.status >= 500 || res.status === 429 || isConcurrencyLimit || isCreditLimit,
           });
         }
         return (await res.json()) as unknown;
