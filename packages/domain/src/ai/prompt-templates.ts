@@ -108,15 +108,30 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `gentle, PHYSICALLY GROUNDED motion (slow dolly, push-in, subtle parallax, softly drifting ` +
     `light). Keep motion restrained and realistic — avoid fabric or objects that float, morph, ` +
     `or move in physically impossible ways; any fabric motion must be a light, natural settle.\n` +
-    `2) OVERLAY — 4:5 portrait still IMAGE(s): tight detail or product shots (texture, hands, ` +
-    `object, fabric, grooming) that live in the SAME world, wardrobe, and color grade as the ` +
-    `background but with tighter, editorial framing. Provide a primary overlay and a second, ` +
-    `DIFFERENT complementary detail (the window rotates between them on longer scenes).\n\n` +
+    `   MOTION REALISM (critical — the video model breaks physics on big movement): the primary ` +
+    `motion should be AMBIENT — the camera and light move, not the subject. If a person is in ` +
+    `frame, keep them in a STABLE pose or ONE small grounded micro-action (sipping, turning a ` +
+    `page, adjusting a cuff, holding an object) with feet planted. NEVER describe a person ` +
+    `walking across a room, walking toward the bed, traversing the space, or any full-body ` +
+    `locomotion — the model renders that as clipping through furniture and floating feet. Prefer ` +
+    `describing the ROOM and the LIGHT over describing the person's movement.\n` +
+    `2) OVERLAY — 4:5 portrait still IMAGE(s): a TIGHT MACRO detail of the SAME world (texture, ` +
+    `hands, a single object surface, fabric weave, grooming) in the same wardrobe and color grade ` +
+    `as the background, with tighter, editorial framing. Provide a primary overlay and a second, ` +
+    `DIFFERENT complementary detail (the window rotates between them on longer scenes).\n` +
+    `   COMPOSITING COHERENCE (critical — the overlay is a window floated OVER the background, so ` +
+    `the two are seen together): the overlay must read as a MAGNIFIED CROP of the same scene — a ` +
+    `close detail, NOT a separate free-standing object shot on its own. Never make the overlay a ` +
+    `different whole object at a different scale than the background's main subject (e.g. a ` +
+    `bouquet of flowers over a perfume-bottle background), because stacked they fuse into one ` +
+    `impossible object ("flowers in the bottle"). If the background already shows the hero object, ` +
+    `the overlay must be a macro of THAT object or its texture/surroundings — never a second, ` +
+    `competing object placed on top of it.\n\n` +
     `Every overlay prompt MUST read like a brief for a high-end beauty/lifestyle campaign and ` +
     `specify: subject, environment, lighting, camera angle, lens (e.g. 85mm), composition, ` +
     `materials & textures, color palette, mood, and depth of field. Never write a vague prompt ` +
-    `like "perfume bottle" — write "elegant crystal perfume bottle on white silk beside fresh ` +
-    `peonies, warm morning light through linen, shallow depth of field, champagne palette, 85mm".\n\n` +
+    `like "perfume bottle" — write "extreme macro of the crystal facets and engraved cap of the ` +
+    `same perfume bottle, dewy light, shallow depth of field, champagne palette, 100mm macro".\n\n` +
     `Then choose the overlay's EDITING PLAN:\n` +
     `- overlayPosition (left | center | right): assume the background usually holds the focal ` +
     `subject near center — pick the side that keeps that subject visible. Use CENTER only when the ` +
@@ -176,12 +191,17 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `${prev}\n${next}\n\n` +
     `Write, for the BACKGROUND video: positivePrompt (one dense cinematic paragraph), ` +
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
-    `Then, for the OVERLAY window: overlayPrompt (a portrait 4:5 detail/product still in the ` +
-    `same world and grade — tighter framing, a complementary subject, not a repeat of the ` +
-    `background) and overlayNegativePrompt. Also provide overlayPrompt2: a SECOND, DIFFERENT ` +
-    `complementary detail in the same world/grade (another object, angle, or texture — not a ` +
-    `repeat of overlayPrompt) that the overlay window rotates to on longer scenes — set it to ` +
+    `Then, for the OVERLAY window: overlayPrompt (a portrait 4:5 MACRO detail of the SAME scene — ` +
+    `a tight crop of the hero object, a texture, hands, or a surface in the same world and grade — ` +
+    `tighter framing, NOT a different free-standing object at a different scale that would fuse ` +
+    `with the background subject when floated over it) and overlayNegativePrompt. Also provide ` +
+    `overlayPrompt2: a SECOND, DIFFERENT macro detail of the same world/grade (another angle, ` +
+    `surface, or texture of the same subject — not a repeat of overlayPrompt, and still not a ` +
+    `competing separate object) that the overlay window rotates to on longer scenes — set it to ` +
     `null if this scene only needs one overlay.\n\n` +
+    `Also, in the BACKGROUND positivePrompt and motion fields: describe ambient motion (camera, ` +
+    `light, steam, a light fabric settle) and keep any person in a stable, grounded pose — do NOT ` +
+    `write that she walks, strolls, moves through, or crosses the room.\n\n` +
     `Finally, the OVERLAY EDITING PLAN — choose these deliberately for THIS beat (not by rote):\n` +
     `- overlayPosition: left, center, or right (center only when the overlay should replace the ` +
     `background as a full mood/lifestyle moment; otherwise the side that best preserves the focal ` +
