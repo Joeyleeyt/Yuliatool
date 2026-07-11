@@ -48,6 +48,10 @@ async function generatePipMasks(workDir: string, ow: number, oh: number): Promis
     `'if(lte(hypot(X-clip(X,${r},W-1-${r}),Y-clip(Y,${r},H-1-${r})),${r}),255,0)'`;
 
   // Grayscale mask: value IS the alpha we'll merge onto the overlay clip later.
+  // `format=gray` BEFORE geq is critical: without it the source is YUV limited
+  // range ("TV", 16–235), so geq's lum=255 round-trips through the PNG as ~178 —
+  // giving the whole window ~70% alpha and making the overlay image look
+  // semi-transparent. Forcing full-range gray keeps the interior a true 255.
   await runFfmpeg([
     '-f',
     'lavfi',
@@ -56,7 +60,7 @@ async function generatePipMasks(workDir: string, ow: number, oh: number): Promis
     '-frames:v',
     '1',
     '-vf',
-    `geq=lum=${roundedAlpha}`,
+    `format=gray,geq=lum=${roundedAlpha}`,
     windowMaskPath,
   ]);
 

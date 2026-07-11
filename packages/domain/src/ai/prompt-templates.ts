@@ -104,7 +104,9 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `picture-in-picture luxury shot. ${HOUSE_STYLE.descriptor} You craft TWO complementary ` +
     `prompts per scene:\n` +
     `1) BACKGROUND — a wide, 16:9, ~8-second cinematic lifestyle/establishing VIDEO clip with ` +
-    `gentle motion (dolly, push-in, parallax, drifting light, flowing fabric).\n` +
+    `gentle, PHYSICALLY GROUNDED motion (slow dolly, push-in, subtle parallax, softly drifting ` +
+    `light). Keep motion restrained and realistic — avoid fabric or objects that float, morph, ` +
+    `or move in physically impossible ways; any fabric motion must be a light, natural settle.\n` +
     `2) OVERLAY — 4:5 portrait still IMAGE(s): tight detail or product shots (texture, hands, ` +
     `object, fabric, grooming) that live in the SAME world, wardrobe, and color grade as the ` +
     `background but with tighter, editorial framing. Provide a primary overlay and a second, ` +

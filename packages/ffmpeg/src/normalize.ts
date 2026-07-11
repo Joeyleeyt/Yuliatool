@@ -54,6 +54,32 @@ async function backgroundSlowFactor(backgroundPath: string, durationSec: number)
 }
 
 /**
+ * Fill-to-duration chain for a background clip: clone-pad the tail up to the
+ * scene length (so length is guaranteed) and then apply a slow, continuous
+ * `zoompan` push-in across the WHOLE clip. This turns what used to be a static
+ * freeze on the last frame — visible now that clips play near-normal speed and
+ * don't stretch to fill (maxSlowFactor ≈ 1) — into a smooth, subtle zoom, so the
+ * frozen tail keeps moving instead of hard-freezing (client feedback).
+ *
+ * Emitted as filter links (no leading/trailing separators) meant to sit between
+ * an upstream `...,fps=${fps}` and the downstream grade/format: caller wraps it.
+ */
+function fillToDurationChain(W: number, H: number, fps: number, durationSec: number): string {
+  const frames = Math.max(1, Math.round(durationSec * fps));
+  // Pre-scale larger so the zoom has headroom to push in without exposing edges.
+  const overW = Math.round(W * 1.2);
+  const overH = Math.round(H * 1.2);
+  const zoomStep = ((TRANSITION.fillZoom - 1) / frames).toFixed(6);
+  const d = durationSec.toFixed(3);
+  return (
+    `tpad=stop_mode=clone:stop_duration=${d},` +
+    `scale=${overW}:${overH}:force_original_aspect_ratio=increase,crop=${overW}:${overH},` +
+    `zoompan=z='min(zoom+${zoomStep},${TRANSITION.fillZoom})':d=1:` +
+    `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${fps}`
+  );
+}
+
+/**
  * Full-frame composite for a video-only "breather" scene: cover-crop the
  * background to the whole canvas, slow-to-fill, grade, and (optionally) burn the
  * numbered title card. No overlay window, no shadow.
@@ -72,7 +98,7 @@ async function compositeFullFrame(
 
   const graph =
     `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
-    `setpts=${slow}*PTS,fps=${fps},tpad=stop_mode=clone:stop_duration=${d},` +
+    `setpts=${slow}*PTS,fps=${fps},${fillToDurationChain(W, H, fps, o.durationSec)},` +
     `${gradeFilter()},setsar=1${titleChain},format=${pix}[out]`;
 
   await runFfmpeg([
@@ -190,9 +216,10 @@ export async function compositeScene(
   const overlayInputBase = 3;
 
   const parts: string[] = [
-    // Background: cover-crop, gentle slow-mo to fill, fix fps, safety clone-pad, grade.
+    // Background: cover-crop, gentle slow-mo to fill, fix fps, then fill any tail
+    // with a slow zoom-push (instead of a static freeze), grade.
     `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
-      `setpts=${slow}*PTS,fps=${fps},tpad=stop_mode=clone:stop_duration=${d},${grade},setsar=1[bg]`,
+      `setpts=${slow}*PTS,fps=${fps},${fillToDurationChain(W, H, fps, o.durationSec)},${grade},setsar=1[bg]`,
   ];
 
   // Each overlay: merge the pre-baked rounded-rect mask onto its alpha channel

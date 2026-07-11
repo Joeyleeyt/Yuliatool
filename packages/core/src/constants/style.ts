@@ -31,9 +31,18 @@ export const HOUSE_STYLE = {
     'push-ins and static beauty shots; recurring motifs of white peonies, silk textures and ' +
     'macro liquid droplets. YouTube faceless channel production quality.',
   colorPalette: ['warm champagne', 'soft ivory', 'muted gold', 'deep teal', 'deep crimson', 'crystal white'],
-  /** Global negative prompt applied to every generation to protect quality. */
+  /**
+   * Global negative prompt applied to every generation to protect quality. The
+   * motion/physics terms (morphing, floating, warping fabric, etc.) target the
+   * temporal-coherence failures typical of text-to-video — e.g. a curtain or
+   * cloth that drifts or morphs unnaturally mid-clip (client feedback on a
+   * "non-realistic" floating-cloth scene).
+   */
   negativePrompt:
     'lowres, blurry, deformed, disfigured, extra limbs, bad anatomy, watermark, text, ' +
     'logo, cartoon, cgi look, plastic skin, oversaturated, harsh flash, cluttered background, ' +
-    'amateur, distorted face, mutated hands',
+    'amateur, distorted face, mutated hands, ' +
+    'morphing, warping, flickering, unstable geometry, floating objects, levitating fabric, ' +
+    'unnatural motion, physically impossible movement, melting, jittering, wobbling walls, ' +
+    'inconsistent lighting between frames',
 } as const;
