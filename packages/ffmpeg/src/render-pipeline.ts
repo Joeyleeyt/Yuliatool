@@ -27,17 +27,17 @@ export async function compositeSegment(
   const targetLen = isLast ? seg.displayDurationSec : seg.displayDurationSec + T;
   const out = join(workDir, `scene_${String(index).padStart(4, '0')}.mp4`);
 
-  const titleCard =
-    seg.titleText && seg.itemNumber
-      ? { itemNumber: seg.itemNumber, titleText: seg.titleText }
-      : undefined;
+  // Title cards are disabled per client feedback ("the text can be removed"): no
+  // burned-in "#N / TITLE" overlay. Pass `undefined` so compositeScene skips the
+  // drawtext chain entirely. Re-enable by threading seg.titleText/itemNumber back
+  // through here if the numbered listicle labels are wanted again.
   await compositeScene(
     seg.backgroundPath,
     seg.overlayPaths,
     seg.overlaySide,
     out,
     { width, height, fps, durationSec: targetLen },
-    titleCard,
+    undefined,
   );
   return out;
 }

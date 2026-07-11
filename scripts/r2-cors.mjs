@@ -39,7 +39,11 @@ for (const [k, v] of Object.entries({
   }
 }
 
-const defaultOrigins = ['https://yuliatool-web.vercel.app', 'http://localhost:3000'];
+const defaultOrigins = [
+  'https://classy-woman.vercel.app',
+  'https://yuliatool-web.vercel.app',
+  'http://localhost:3000',
+];
 const extraOrigins = (CORS_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((s) => s.trim())

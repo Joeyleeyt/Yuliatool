@@ -81,8 +81,21 @@ export function overlayTreatmentForScene(
   const isFirst = index === 0;
   const isLast = index === total - 1;
   if (isFirst || isLast) return SceneVisualType.VIDEO;
+  // Sprinkle in extra full-frame (no-overlay) breather scenes so the edit isn't
+  // wall-to-wall PiP windows (client feedback: "include videos without images").
+  // Every Nth middle scene is video-only regardless of narration; overlay/PiP
+  // scenes still stay the majority.
+  if (index % VIDEO_ONLY_EVERY_NTH_SCENE === 0) return SceneVisualType.VIDEO;
   return narrationHasProductBeat(narration) ? SceneVisualType.IMAGE : SceneVisualType.VIDEO;
 }
+
+/**
+ * Force a full-frame, video-only "breather" scene every Nth middle scene, on top
+ * of the first/last and the narration heuristic, so the finished video mixes in
+ * more shots without an overlay window. Higher N = fewer forced breathers (keeps
+ * overlay/PiP scenes the majority).
+ */
+const VIDEO_ONLY_EVERY_NTH_SCENE = 4;
 
 /** A scene shows an overlay window iff it's a product/IMAGE beat. */
 export function sceneHasOverlay(visualType: SceneVisualType): boolean {
@@ -137,12 +150,12 @@ export const TRANSITION = {
   kenBurnsZoom: 1.12,
   /**
    * Cap on how far a short background clip may be slowed (via PTS) to fill its
-   * scene, instead of freezing the last frame. Keeps motion fluid without
-   * extreme, unnatural slow-motion. Sized to SEGMENT_WINDOW_SEC.split (25s) ÷ an
-   * ~8s native 69Labs clip = 3.125x, so even the longest scene is fully covered
-   * by slow-motion with zero freeze-frame tail (see SEGMENT_WINDOW_SEC doc).
+   * scene, instead of freezing the last frame. Kept close to 1x so clips play at
+   * (near) NORMAL SPEED — earlier 3.2x stretching read as unnatural slow-motion
+   * (client feedback). At 1.2x motion still looks natural; any residual gap after
+   * this gentle slow is clone-padded (tpad) rather than stretched further.
    */
-  maxSlowFactor: 3.2,
+  maxSlowFactor: 1.2,
 } as const;
 
 /**
@@ -173,8 +186,11 @@ export const PIP_LAYOUT = {
   overlayStartOffsetSec: 0.6, // background plays alone before the window appears
   overlayEndOffsetSec: 0.6, // window exits this long before the scene ends
   minOverlayVisibleSec: 1.5, // floor so short/last scenes don't collapse the window
-  fadeInSec: 0.5, // softer window entrance
-  fadeOutSec: 0.5, // matching soft exit
+  // Very short fades so the overlay reads as SOLID for essentially its whole
+  // on-screen life. Longer 0.5s fades left the image visibly semi-transparent
+  // for ~20% of its ~5s visible span (client feedback: "make images solid").
+  fadeInSec: 0.15, // near-instant window entrance
+  fadeOutSec: 0.15, // matching quick exit
   // Aspect ratios requested from 69Labs per layer. Background is the render
   // orientation (wide); the overlay is a portrait detail/product shot.
   backgroundAspectRatio: '16:9',
