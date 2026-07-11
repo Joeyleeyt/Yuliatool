@@ -98,39 +98,84 @@ function gradeFilter(): string {
 }
 
 /**
- * Background fit factor: gently slow a short clip (via PTS) to fill the scene
- * rather than freezing its last frame. Only ever slows down, capped for natural
- * motion; any residual gap still clone-pads (tpad) as a safety net.
+ * Probe the assembled background's real duration (falls back to the scene length
+ * if the probe fails, which makes `buildBackgroundFill` take the no-loop path).
  */
-async function backgroundSlowFactor(backgroundPath: string, durationSec: number): Promise<string> {
+async function backgroundSrcDuration(backgroundPath: string, durationSec: number): Promise<number> {
   const probed = await probe(backgroundPath).catch(() => null);
-  const srcDur = probed && probed.durationSec > 0 ? probed.durationSec : durationSec;
-  return Math.min(TRANSITION.maxSlowFactor, Math.max(1, durationSec / srcDur)).toFixed(4);
+  return probed && probed.durationSec > 0 ? probed.durationSec : durationSec;
 }
 
 /**
- * Fill-to-duration chain for a background clip: clone-pad the tail up to the
- * scene length (so length is guaranteed) and then apply a slow, continuous
- * `zoompan` push-in across the WHOLE clip. This turns what used to be a static
- * freeze on the last frame — visible now that clips play near-normal speed and
- * don't stretch to fill (maxSlowFactor ≈ 1) — into a smooth, subtle zoom, so the
- * frozen tail keeps moving instead of hard-freezing (client feedback).
+ * Build the complete `[0:v]…[<outLabel>]` background chain that fills a scene of
+ * `durationSec` from an assembled source clip WITHOUT ever freezing a tail.
  *
- * Emitted as filter links (no leading/trailing separators) meant to sit between
- * an upstream `...,fps=${fps}` and the downstream grade/format: caller wraps it.
+ * Two regimes, chosen from the source's real (probed) duration:
+ *
+ *   1. Source is long enough (within `maxSlowFactor` of the scene): cover-crop,
+ *      gently slow (`setpts`) so its native motion stretches to fill, fps-fix.
+ *      This is the common case and is unchanged from before.
+ *
+ *   2. Source is SHORT (a big shortfall — the provider returned clips shorter
+ *      than assumed, so even max slow can't cover it): instead of clone-padding
+ *      a FROZEN tail (the old `tpad`+tiny-zoom, which read as a hard freeze once
+ *      the zoom maxed out — client feedback: "still freezing 1:41–2:54"), LOOP
+ *      the footage with a seamless boomerang (forward → reverse → forward …) so
+ *      the whole scene keeps real motion. The ping-pong joins are seamless (last
+ *      frame meets its mirror), so there's no visible cut on repeat.
+ *
+ * Emits a self-contained filtergraph fragment ending in `[outLabel]`, consuming
+ * input pad `[0:v]`. Callers append `,${grade},setsar=1[…]` downstream by
+ * relabeling; here we always end at `[outLabel]` and let the caller graft the
+ * grade/title/format on via a following filter on that label.
  */
-function fillToDurationChain(W: number, H: number, fps: number, durationSec: number): string {
-  const frames = Math.max(1, Math.round(durationSec * fps));
-  // Pre-scale larger so the zoom has headroom to push in without exposing edges.
-  const overW = Math.round(W * 1.2);
-  const overH = Math.round(H * 1.2);
-  const zoomStep = ((TRANSITION.fillZoom - 1) / frames).toFixed(6);
-  const d = durationSec.toFixed(3);
+function buildBackgroundFill(
+  srcDurationSec: number,
+  W: number,
+  H: number,
+  fps: number,
+  durationSec: number,
+  outLabel: string,
+): string {
+  const cover = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`;
+  const srcDur = srcDurationSec > 0 ? srcDurationSec : durationSec;
+  // How much the gentle slow-mo alone can cover.
+  const slowCoverSec = srcDur * TRANSITION.maxSlowFactor;
+  // A small epsilon so a source that's essentially long enough doesn't loop for
+  // a few frames' worth of shortfall (the trailing `-t` trims any tiny excess).
+  const EPS = 0.15;
+
+  if (slowCoverSec >= durationSec - EPS) {
+    // Regime 1: gentle slow to fill. Cap the factor so a source that's already
+    // long enough plays at ~1x; the downstream `-t durationSec` trims any excess.
+    const slow = Math.min(TRANSITION.maxSlowFactor, Math.max(1, durationSec / srcDur)).toFixed(4);
+    return `[0:v]${cover},setpts=${slow}*PTS,fps=${fps}[${outLabel}]`;
+  }
+
+  // Regime 2: boomerang-loop to fill. Build ONE forward+reverse cycle (2×srcDur
+  // of seamless motion), then loop that cycle enough whole times to exceed the
+  // scene length. `loop` repeats a buffered frame window: we buffer the entire
+  // ping-pong cycle and repeat it. Everything past `durationSec` is trimmed by
+  // the caller's `-t`. A light constant slow (maxSlowFactor) still applies so the
+  // motion reads calm rather than brisk.
+  const slow = TRANSITION.maxSlowFactor.toFixed(4);
+  const cycleSec = 2 * srcDur; // forward + reverse
+  const effectiveCycleSec = cycleSec * TRANSITION.maxSlowFactor;
+  // Whole cycles needed to cover the scene (ceil), min 1. Each cycle is one
+  // forward + one reverse of the source.
+  const cycles = Math.max(1, Math.ceil(durationSec / effectiveCycleSec));
+  // Frames in one ping-pong cycle (pre-slow); `loop` counts frames.
+  const cycleFrames = Math.max(1, Math.round(cycleSec * fps));
+
   return (
-    `tpad=stop_mode=clone:stop_duration=${d},` +
-    `scale=${overW}:${overH}:force_original_aspect_ratio=increase,crop=${overW}:${overH},` +
-    `zoompan=z='min(zoom+${zoomStep},${TRANSITION.fillZoom})':d=1:` +
-    `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${fps}`
+    // Normalize + split, reverse one branch, concat to a forward→reverse cycle.
+    `[0:v]${cover},fps=${fps},setsar=1,split[fwd${outLabel}][rv${outLabel}];` +
+    `[rv${outLabel}]reverse[rev${outLabel}];` +
+    `[fwd${outLabel}][rev${outLabel}]concat=n=2:v=1:a=0[cycle${outLabel}];` +
+    // Repeat the whole cycle enough times, then gently slow the result. `loop`
+    // with size=cycleFrames buffers one cycle and emits it `loop`+1 times total.
+    `[cycle${outLabel}]loop=loop=${cycles - 1}:size=${cycleFrames}:start=0,` +
+    `setpts=${slow}*PTS,fps=${fps}[${outLabel}]`
   );
 }
 
@@ -142,8 +187,9 @@ function fillToDurationChain(W: number, H: number, fps: number, durationSec: num
  *
  * The chained clips run `Σ clipDur - (n-1)·crossfade`. If that still falls short
  * of `durationSec` (e.g. the provider returned shorter clips than expected), the
- * final tail zoom-fills as a safety net (fillToDurationChain); if it's longer,
- * the downstream `-t durationSec` trims it. Returns the built clip's path.
+ * caller's `buildBackgroundFill` seamlessly boomerang-loops it to length (no
+ * frozen tail); if it's longer, the downstream `-t durationSec` trims it.
+ * Returns the built clip's path.
  *
  * Single-clip scenes (the common case pre-multi-clip, and any 1-slot scene)
  * short-circuit to that clip directly — the caller's existing slow+fill chain
@@ -220,15 +266,15 @@ async function compositeFullFrame(
   const d = o.durationSec.toFixed(3);
   const pix = RENDER_ENCODING.pixelFormat;
   // Assemble the scene's clips (native speed, crossfade-chained) into one
-  // background, then slow/zoom-fill only whatever remainder is still short.
+  // background, then fill the scene from it — gently slowing when it's nearly
+  // long enough, or seamlessly boomerang-LOOPING when it's short (no frozen
+  // tail; see buildBackgroundFill).
   const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
-  const slow = await backgroundSlowFactor(backgroundPath, o.durationSec);
+  const srcDur = await backgroundSrcDuration(backgroundPath, o.durationSec);
   const titleChain = title ? buildTitleCardChain(W, H, title) : '';
 
-  const graph =
-    `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
-    `setpts=${slow}*PTS,fps=${fps},${fillToDurationChain(W, H, fps, o.durationSec)},` +
-    `${gradeFilter()},setsar=1${titleChain},format=${pix}[out]`;
+  const fill = buildBackgroundFill(srcDur, W, H, fps, o.durationSec, 'bgfill');
+  const graph = `${fill};[bgfill]${gradeFilter()},setsar=1${titleChain},format=${pix}[out]`;
 
   await runFfmpeg([
     '-i',
@@ -354,8 +400,9 @@ export async function compositeScene(
     }),
   );
 
-  // Fit the background to the scene by gently slowing it (PTS).
-  const slow = await backgroundSlowFactor(backgroundPath, o.durationSec);
+  // Fit the background to the scene: gentle slow when it's nearly long enough,
+  // else a seamless boomerang loop (no frozen tail — see buildBackgroundFill).
+  const srcDur = await backgroundSrcDuration(backgroundPath, o.durationSec);
 
   // Warm "quiet luxury" grade on the BACKGROUND only.
   const grade = gradeFilter();
@@ -368,10 +415,10 @@ export async function compositeScene(
   const overlayInputBase = 3;
 
   const parts: string[] = [
-    // Background: cover-crop, gentle slow-mo to fill, fix fps, then fill any tail
-    // with a slow zoom-push (instead of a static freeze), grade.
-    `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
-      `setpts=${slow}*PTS,fps=${fps},${fillToDurationChain(W, H, fps, o.durationSec)},${grade},setsar=1[bg]`,
+    // Background fill (slow-or-loop) -> grade -> [bg]. buildBackgroundFill emits
+    // `[0:v]…[bgfill]`; graft the grade onto that label to produce [bg].
+    `${buildBackgroundFill(srcDur, W, H, fps, o.durationSec, 'bgfill')};` +
+      `[bgfill]${grade},setsar=1[bg]`,
   ];
 
   // Each overlay: merge the pre-baked rounded-rect mask onto its alpha channel

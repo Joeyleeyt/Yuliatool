@@ -171,18 +171,12 @@ export const TRANSITION = {
   // Ken Burns (slow zoom/pan) applied to still images to add life.
   kenBurnsZoom: 1.12,
   /**
-   * Gentle push-in applied across a background clip so the clone-padded tail
-   * (the time past the clip's native, near-normal-speed length) keeps moving
-   * with a smooth zoom instead of hard-freezing on the last frame. Subtle — just
-   * enough that the fill reads as "still alive," not a Ken Burns effect.
-   */
-  fillZoom: 1.08,
-  /**
    * Cap on how far a short background clip may be slowed (via PTS) to fill its
-   * scene, instead of freezing the last frame. Kept close to 1x so clips play at
-   * (near) NORMAL SPEED — earlier 3.2x stretching read as unnatural slow-motion
-   * (client feedback). At 1.2x motion still looks natural; any residual gap after
-   * this gentle slow is clone-padded (tpad) rather than stretched further.
+   * scene. Kept close to 1x so clips play at (near) NORMAL SPEED — earlier 3.2x
+   * stretching read as unnatural slow-motion (client feedback). When even 1.2x
+   * can't cover the scene (the provider returned clips much shorter than
+   * assumed), the render seamlessly BOOMERANG-LOOPS the footage to length rather
+   * than freezing a clone-padded tail — see buildBackgroundFill in @yulia/ffmpeg.
    */
   maxSlowFactor: 1.2,
 } as const;
