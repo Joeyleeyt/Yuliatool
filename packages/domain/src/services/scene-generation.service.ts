@@ -6,6 +6,7 @@ import {
   INTERSTITIAL_SEED_KEY,
   sceneHasOverlay,
   overlayCountForDuration,
+  backgroundClipCountForDuration,
   NotFoundError,
   ValidationError,
   ExternalServiceError,
@@ -109,16 +110,24 @@ export class SceneGenerationService {
     // POST /generate calls in the same instant; combined across the worker's
     // concurrent scenes that burst is what trips 69Labs' concurrent-job cap
     // (much lower than its per-minute rate limit — see SixtyNineLabsClient).
-    const layers: Promise<void>[] = [
-      this.runLayer(
-        projectId,
-        sceneId,
-        'video',
-        0,
-        this.backgroundRequest(projectId, sceneId, prompt, hasOverlay),
-        0,
-      ),
-    ];
+    // Background is several ~8s clips played back-to-back so the scene fills at
+    // normal speed instead of stretching/freezing a single clip. One VIDEO_CLIP
+    // asset per sequence slot, each with a distinct seed (so the clips differ)
+    // but the SAME prompt (so they stay in the same world/grade).
+    const backgroundCount = backgroundClipCountForDuration(scene.duration_sec);
+    const layers: Promise<void>[] = [];
+    for (let slot = 0; slot < backgroundCount; slot++) {
+      layers.push(
+        this.runLayer(
+          projectId,
+          sceneId,
+          'video',
+          slot,
+          this.backgroundRequest(projectId, sceneId, prompt, hasOverlay, slot),
+          slot * SUBMIT_STAGGER_MS,
+        ),
+      );
+    }
     if (hasOverlay) {
       // Product scenes rotate 1–2 overlay images (each on screen ~5–8s), so a
       // longer scene gets a second, distinct overlay. Generate one IMAGE asset
@@ -132,7 +141,10 @@ export class SceneGenerationService {
             'image',
             slot,
             this.overlayRequest(projectId, sceneId, prompt, slot),
-            (slot + 1) * SUBMIT_STAGGER_MS,
+            // Stagger overlays AFTER the background clips so a scene's whole
+            // burst of POST /generate calls spreads out (backgroundCount videos
+            // first, then the images).
+            (backgroundCount + slot) * SUBMIT_STAGGER_MS,
           ),
         );
       }
@@ -163,10 +175,10 @@ export class SceneGenerationService {
     submitDelayMs: number,
   ): Promise<void> {
     const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-    let asset =
-      assetKind === AssetKind.IMAGE
-        ? await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot)
-        : await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind);
+    // Both layers are now slot-addressed: a scene has 1–2 overlay images AND
+    // several background clips (played back-to-back to fill the scene at normal
+    // speed), so each is looked up + persisted by its rotation/sequence slot.
+    let asset = await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot);
     if (asset?.status === 'stored') return; // fully done
     if (!asset) {
       asset = await this.ctx.repos.assets.create({
@@ -175,7 +187,7 @@ export class SceneGenerationService {
         kind: assetKind,
         status: 'pending',
         contentType: CONTENT_TYPE[kind],
-        ...(assetKind === AssetKind.IMAGE ? { metadata: { slot } } : {}),
+        metadata: { slot },
       });
     }
     if (asset.status === 'generated' && asset.source_url) return; // awaiting download
@@ -265,26 +277,32 @@ export class SceneGenerationService {
     sceneId: string,
     prompt: PromptRow,
     hasOverlay: boolean,
+    slot: number,
   ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
     const aspectRatio = asString(params.backgroundAspectRatio, PIP_LAYOUT.backgroundAspectRatio);
+    // Each background sequence slot gets a DISTINCT seed so the back-to-back
+    // clips aren't identical footage; slot 0 keeps the original seed so existing
+    // single-clip projects reconcile to the same asset. Same prompt across slots
+    // keeps every clip in one continuous world/grade within the scene.
+    const seedParts = slot === 0 ? [] : [String(slot)];
     if (hasOverlay) {
       return {
         prompt: prompt.positive_prompt,
         ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
         aspectRatio,
-        seed: seedFrom(projectId, sceneId, 'video'),
+        seed: seedFrom(projectId, sceneId, 'video', ...seedParts),
       };
     }
-    // Shared recurring interstitial: same prompt + same seed across all
-    // video-only scenes (falls back to this scene's prompt for projects
-    // prompted before the interstitial field existed).
+    // Shared recurring interstitial: same prompt across all video-only scenes.
+    // The seed still varies by slot so a multi-clip interstitial isn't the same
+    // 8s looped, while slot 0 stays the shared establishing look.
     const interstitial = asString(params.interstitialPrompt, prompt.positive_prompt);
     return {
       prompt: interstitial,
       ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
       aspectRatio,
-      seed: seedFrom(projectId, INTERSTITIAL_SEED_KEY, 'video'),
+      seed: seedFrom(projectId, INTERSTITIAL_SEED_KEY, 'video', ...seedParts),
     };
   }
 

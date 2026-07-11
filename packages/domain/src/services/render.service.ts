@@ -218,11 +218,24 @@ export class RenderService {
       // Product beats have a background + 1–2 rotated overlays; video-only beats
       // are full-frame background only (no overlay was generated).
       const hasOverlay = sceneHasOverlay(scene.visual_type);
-      const bg = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP);
-      if (!bg?.r2_key) throw new ValidationError('Scene background missing', { sceneId: scene.id });
 
-      const backgroundPath = join(workDir, `bg_${pad}`);
-      const downloads = [this.download(bg.r2_key, backgroundPath)];
+      // A scene's background is one or more ~8s clips (slots) played back-to-
+      // back to fill the scene at normal speed. Download every stored slot in
+      // sequence order. (Projects generated before multi-clip backgrounds have
+      // exactly one, slot 0 — same code path.)
+      const backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(
+        (b) => b.status === 'stored' && b.r2_key,
+      );
+      if (backgrounds.length === 0)
+        throw new ValidationError('Scene background missing', { sceneId: scene.id });
+
+      const backgroundPaths: string[] = [];
+      const downloads: Promise<void>[] = [];
+      backgrounds.forEach((bg, slot) => {
+        const p = join(workDir, `bg_${pad}_${slot}`);
+        backgroundPaths.push(p);
+        downloads.push(this.download(bg.r2_key!, p));
+      });
 
       // Download every stored overlay slot in rotation order. A demoted scene
       // (visual_type flipped to VIDEO) has none; a product scene has 1–2.
@@ -249,7 +262,7 @@ export class RenderService {
 
       const meta = itemMeta[i]!;
       const segment: RenderSegment = {
-        backgroundPath,
+        backgroundPaths,
         overlayPaths, // empty for full-frame video-only scenes
         overlaySide: overlaySide(scene.scene_index),
         displayDurationSec,

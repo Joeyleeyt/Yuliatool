@@ -5,7 +5,8 @@ import { AssetKind } from '../enums/asset.js';
  * makes per-project cleanup a prefix delete.
  *
  *   projects/{projectId}/voiceover/{assetId}.{ext}
- *   projects/{projectId}/scenes/{sceneId}/clip.{ext}
+ *   projects/{projectId}/scenes/{sceneId}/clip.{ext}         (background slot 0)
+ *   projects/{projectId}/scenes/{sceneId}/clip_{slot}.{ext}  (background slot 1+)
  *   projects/{projectId}/scenes/{sceneId}/image.{ext}        (overlay slot 0)
  *   projects/{projectId}/scenes/{sceneId}/image_{slot}.{ext} (overlay slot 1+)
  *   projects/{projectId}/renders/{renderId}.mp4
@@ -15,8 +16,13 @@ export const R2_PREFIX = {
   project: (projectId: string) => `projects/${projectId}`,
   voiceover: (projectId: string, assetId: string, ext: string) =>
     `projects/${projectId}/voiceover/${assetId}.${ext}`,
-  sceneClip: (projectId: string, sceneId: string, ext: string) =>
-    `projects/${projectId}/scenes/${sceneId}/clip.${ext}`,
+  // A scene may hold multiple background clips (played back-to-back to fill the
+  // scene at normal speed). `slot` discriminates them; slot 0 keeps the legacy
+  // `clip.{ext}` key so existing single-clip backgrounds still resolve.
+  sceneClip: (projectId: string, sceneId: string, ext: string, slot = 0) =>
+    slot === 0
+      ? `projects/${projectId}/scenes/${sceneId}/clip.${ext}`
+      : `projects/${projectId}/scenes/${sceneId}/clip_${slot}.${ext}`,
   // A scene may hold multiple overlay images (rotated within the scene). `slot`
   // discriminates them; slot 0 keeps the legacy `image.{ext}` key so existing
   // single-overlay assets still resolve.

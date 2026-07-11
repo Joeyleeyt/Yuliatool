@@ -5,6 +5,7 @@ import {
   PIP_LAYOUT,
   TITLE_CARD,
   COLOR_GRADE,
+  BACKGROUND_CLIP,
   type OverlaySide,
 } from '@yulia/core';
 import { INTERMEDIATE_ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
@@ -80,12 +81,83 @@ function fillToDurationChain(W: number, H: number, fps: number, durationSec: num
 }
 
 /**
+ * Build ONE scene-length background clip from a scene's sequence of ~8s source
+ * clips by cover-cropping each to WxH at NORMAL SPEED and crossfade-chaining
+ * them, so the background has real motion for the whole scene instead of a
+ * single clip stretched (slow-mo) or frozen to fill it.
+ *
+ * The chained clips run `Σ clipDur - (n-1)·crossfade`. If that still falls short
+ * of `durationSec` (e.g. the provider returned shorter clips than expected), the
+ * final tail zoom-fills as a safety net (fillToDurationChain); if it's longer,
+ * the downstream `-t durationSec` trims it. Returns the built clip's path.
+ *
+ * Single-clip scenes (the common case pre-multi-clip, and any 1-slot scene)
+ * short-circuit to that clip directly — the caller's existing slow+fill chain
+ * then handles it exactly as before, so nothing regresses for them.
+ */
+async function buildSceneBackground(
+  backgroundPaths: string[],
+  output: string,
+  o: NormalizeOpts,
+): Promise<string> {
+  if (backgroundPaths.length <= 1) {
+    // Nothing to concat — let the caller consume the single source directly.
+    return backgroundPaths[0]!;
+  }
+  const { width: W, height: H, fps } = o;
+  const T = BACKGROUND_CLIP.crossfadeSec;
+  const pix = RENDER_ENCODING.pixelFormat;
+
+  // Normalize each source to a plain WxH, native-speed clip first (cover-crop,
+  // fix fps/sar/pixfmt). No grade here — the caller grades the assembled result.
+  const norm = await Promise.all(
+    backgroundPaths.map(async (src, i) => {
+      const clip = `${output}.part${i}.mp4`;
+      const vf =
+        `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
+        `fps=${fps},setsar=1,format=${pix}`;
+      await runFfmpeg(['-i', src, '-an', '-vf', vf, ...INTERMEDIATE_ENCODE_ARGS, clip]);
+      const probed = await probe(clip).catch(() => null);
+      const dur = probed && probed.durationSec > 0 ? probed.durationSec : BACKGROUND_CLIP.nativeClipSec;
+      return { clip, dur };
+    }),
+  );
+
+  // Crossfade-chain the normalized parts. xfade offset is the running sum of
+  // the prior parts' durations minus the accumulated crossfade overlaps.
+  const inputs = norm.flatMap((n) => ['-i', n.clip]);
+  const parts: string[] = [];
+  let last = '0:v';
+  let offset = 0;
+  for (let k = 1; k < norm.length; k++) {
+    offset += norm[k - 1]!.dur - T;
+    const label = k === norm.length - 1 ? 'bgout' : `bx${k}`;
+    parts.push(
+      `[${last}][${k}:v]xfade=transition=fade:duration=${T.toFixed(3)}:offset=${offset.toFixed(3)}[${label}]`,
+    );
+    last = label;
+  }
+  const chained = `${output}.chain.mp4`;
+  await runFfmpeg([
+    ...inputs,
+    '-filter_complex',
+    parts.join(';'),
+    '-map',
+    '[bgout]',
+    '-an',
+    ...INTERMEDIATE_ENCODE_ARGS,
+    chained,
+  ]);
+  return chained;
+}
+
+/**
  * Full-frame composite for a video-only "breather" scene: cover-crop the
  * background to the whole canvas, slow-to-fill, grade, and (optionally) burn the
  * numbered title card. No overlay window, no shadow.
  */
 async function compositeFullFrame(
-  backgroundPath: string,
+  backgroundPaths: string[],
   output: string,
   o: NormalizeOpts,
   title?: TitleCardOpts,
@@ -93,6 +165,9 @@ async function compositeFullFrame(
   const { width: W, height: H, fps } = o;
   const d = o.durationSec.toFixed(3);
   const pix = RENDER_ENCODING.pixelFormat;
+  // Assemble the scene's clips (native speed, crossfade-chained) into one
+  // background, then slow/zoom-fill only whatever remainder is still short.
+  const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
   const slow = await backgroundSlowFactor(backgroundPath, o.durationSec);
   const titleChain = title ? buildTitleCardChain(W, H, title) : '';
 
@@ -152,7 +227,7 @@ function drawtextAlphaEnvelope(appear: number, hold: number, fade: number): stri
  * chain just like a plain normalized segment.
  */
 export async function compositeScene(
-  backgroundPath: string,
+  backgroundPaths: string[],
   overlayPaths: string[],
   side: OverlaySide,
   output: string,
@@ -164,9 +239,13 @@ export async function compositeScene(
   // Full-frame, video-only "breather" scene: no overlay window. Composite the
   // graded background at full canvas (plus the optional title card) and return.
   if (overlayPaths.length === 0) {
-    await compositeFullFrame(backgroundPath, output, o, title);
+    await compositeFullFrame(backgroundPaths, output, o, title);
     return;
   }
+
+  // Assemble the scene's background clips (native speed, crossfade-chained) into
+  // one clip; the PiP chain below consumes it exactly as it did a single source.
+  const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
 
   const ow = even(Math.round(W * PIP_LAYOUT.overlayWidthFrac));
   const oh = even(Math.round(H * PIP_LAYOUT.overlayHeightFrac));

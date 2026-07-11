@@ -32,7 +32,7 @@ export async function compositeSegment(
   // drawtext chain entirely. Re-enable by threading seg.titleText/itemNumber back
   // through here if the numbered listicle labels are wanted again.
   await compositeScene(
-    seg.backgroundPath,
+    seg.backgroundPaths,
     seg.overlayPaths,
     seg.overlaySide,
     out,

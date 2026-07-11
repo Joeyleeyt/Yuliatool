@@ -1,4 +1,5 @@
-import type { AssetKind, AssetStatus } from '@yulia/core';
+import { AssetKind } from '@yulia/core';
+import type { AssetStatus } from '@yulia/core';
 import type { Sql } from '../client.js';
 import type { AssetRow } from '../types/index.js';
 import { BaseRepository } from './base.repository.js';
@@ -64,6 +65,21 @@ export class AssetRepository extends BaseRepository<AssetRow> {
       select * from assets
       where scene_id = ${sceneId} and kind = ${kind}
       order by coalesce((metadata->>'slot')::int, 0) asc, created_at asc`;
+  }
+
+  /**
+   * Slot-addressed lookup/list for a scene's BACKGROUND video clips. A scene now
+   * generates several ~8s clips (one per slot) that the renderer plays back-to-
+   * back to fill the scene at normal speed, so backgrounds use the same slotting
+   * as overlay images. These delegate to the (kind-generic) slot queries with
+   * kind = VIDEO_CLIP; named separately for call-site clarity.
+   */
+  async findSceneVideoBySlot(sceneId: string, slot: number): Promise<AssetRow | null> {
+    return this.findSceneImageBySlot(sceneId, AssetKind.VIDEO_CLIP, slot);
+  }
+
+  async listSceneVideos(sceneId: string): Promise<AssetRow[]> {
+    return this.listSceneImages(sceneId, AssetKind.VIDEO_CLIP);
   }
 
   async findByProject(projectId: string, kind?: AssetKind): Promise<AssetRow[]> {

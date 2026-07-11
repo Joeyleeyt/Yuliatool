@@ -56,6 +56,28 @@ export function overlayCountForDuration(sceneDurationSec: number): number {
   return Math.max(1, Math.min(OVERLAY_SLOT_SEC.maxPerScene, n));
 }
 
+/**
+ * Background video clips per scene. 69Labs returns ~8s clips with no duration
+ * control, but a scene is 16–25s — so instead of stretching/freezing ONE clip
+ * to fill the scene (which read as slow-motion, then as a frozen tail), a scene
+ * generates SEVERAL clips that the renderer plays back-to-back at normal speed.
+ *
+ * Count = ceil(sceneDuration / nativeClipSec), so the clips (minus the small
+ * crossfade overlaps between them) cover the whole scene with real motion. A
+ * short final remainder still zoom-fills as a safety net (see the render side).
+ * Clamped to [1, maxPerScene] to bound generation cost/rate-limit pressure.
+ */
+export const BACKGROUND_CLIP = {
+  nativeClipSec: 8, // 69Labs default clip length (no duration control)
+  maxPerScene: 4, // cost/rate-limit ceiling; 4×8s covers the 25s max scene
+  crossfadeSec: 0.4, // short dissolve where consecutive sub-clips meet
+} as const;
+
+export function backgroundClipCountForDuration(sceneDurationSec: number): number {
+  const n = Math.ceil(sceneDurationSec / BACKGROUND_CLIP.nativeClipSec);
+  return Math.max(1, Math.min(BACKGROUND_CLIP.maxPerScene, n));
+}
+
 // How often the generation stage polls 69Labs for a result now lives in `env`
 // (GENERATION_POLL_INTERVAL_SEC) so it's tunable per-deploy without a rebuild.
 

@@ -63,20 +63,42 @@ export class DownloadAssetsService {
     // the project we BORROW the background of the already-stored scene whose
     // narration is most similar, so the stand-in visual still fits what's being
     // said. Only if there's no usable donor at all does the failure propagate.
+    // A scene's background is one or more clips (slots) played back-to-back.
+    // Slot 0 is REQUIRED (a scene can't render without a background): if it can't
+    // be produced, borrow a similar scene's background as a stand-in. Later slots
+    // are best-effort — if one fails, the scene still renders with the clips that
+    // stored (the remainder zoom-fills), so we don't wedge the project on them.
+    const backgrounds = await this.ctx.repos.assets.listSceneVideos(sceneId);
     let borrowedBackground = false;
-    try {
-      await this.downloadLayer(projectId, sceneId, 'video', scene.duration_sec);
-    } catch (err) {
-      const donor = await this.reuseSimilarBackground(projectId, scene);
-      // No stand-in yet -> re-throw so BullMQ retries. Other scenes download
-      // concurrently, so a later attempt (after backoff) usually finds a stored
-      // donor. Only if none exists by the final attempt does the project fail.
-      if (!donor) throw err;
-      borrowedBackground = true;
-      this.ctx.logger.warn(
-        { projectId, sceneId, donorSceneId: donor.sceneId, score: donor.score, via: donor.via, err },
-        `own background unavailable; reusing ${donor.via} scene background`,
-      );
+    let storedBackgrounds = 0;
+    for (const bg of backgrounds) {
+      const slot = overlaySlotOf(bg);
+      try {
+        await this.downloadLayer(projectId, sceneId, 'video', scene.duration_sec, slot);
+        storedBackgrounds += 1;
+      } catch (err) {
+        if (slot !== 0) {
+          this.ctx.logger.warn(
+            { projectId, sceneId, slot, err },
+            'secondary background clip failed; scene renders with the clips that stored',
+          );
+          continue;
+        }
+        const donor = await this.reuseSimilarBackground(projectId, scene);
+        // No stand-in yet -> re-throw so BullMQ retries. Other scenes download
+        // concurrently, so a later attempt (after backoff) usually finds a stored
+        // donor. Only if none exists by the final attempt does the project fail.
+        if (!donor) throw err;
+        borrowedBackground = true;
+        storedBackgrounds += 1;
+        this.ctx.logger.warn(
+          { projectId, sceneId, donorSceneId: donor.sceneId, score: donor.score, via: donor.via, err },
+          `own background unavailable; reusing ${donor.via} scene background`,
+        );
+      }
+    }
+    if (storedBackgrounds === 0) {
+      throw new ValidationError('No background clip could be stored', { projectId, sceneId });
     }
 
     // The OVERLAY is best-effort and only for product beats. If it can't be
@@ -155,15 +177,17 @@ export class DownloadAssetsService {
     projectId: string,
     scene: SceneRow,
   ): Promise<{ sceneId: string; score: number; via: 'similar' | 'breather' | 'any' } | null> {
-    const targetAsset = await this.ctx.repos.assets.findBySceneAndKind(scene.id, AssetKind.VIDEO_CLIP);
+    // Repoint THIS scene's primary (slot 0) background at a donor's stored clip.
+    const targetAsset = await this.ctx.repos.assets.findSceneVideoBySlot(scene.id, 0);
     if (!targetAsset) return null;
 
     const scenes = await this.ctx.repos.scenes.listByProject(projectId);
-    // Candidate donors: every OTHER scene with a stored background clip.
+    // Candidate donors: every OTHER scene with a stored primary (slot 0)
+    // background clip — the borrowed stand-in is a single clip, so slot 0 alone.
     const donors: { scene: SceneRow; assetId: string }[] = [];
     for (const s of scenes) {
       if (s.id === scene.id) continue;
-      const a = await this.ctx.repos.assets.findBySceneAndKind(s.id, AssetKind.VIDEO_CLIP);
+      const a = await this.ctx.repos.assets.findSceneVideoBySlot(s.id, 0);
       if (a?.status === 'stored' && a.r2_key) donors.push({ scene: s, assetId: a.id });
     }
     if (donors.length === 0) return null;
@@ -223,16 +247,15 @@ export class DownloadAssetsService {
   ): Promise<void> {
     const isVideo = kind === 'video';
     const assetKind = isVideo ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
-    const asset = isVideo
-      ? await this.ctx.repos.assets.findBySceneAndKind(sceneId, assetKind)
-      : await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot);
+    // Both layers are slot-addressed now (background clips AND overlay images).
+    const asset = await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot);
     if (!asset) throw new NotFoundError(`Scene ${kind} asset`, sceneId);
     if (asset.status === 'stored') return; // already downloaded on a prior run
     if (!asset.source_url) throw new ValidationError('Asset has no source URL', { assetId: asset.id });
 
     const ext = ASSET_KIND_EXT[assetKind] ?? (isVideo ? 'mp4' : 'png');
     const key = isVideo
-      ? R2_PREFIX.sceneClip(projectId, sceneId, ext)
+      ? R2_PREFIX.sceneClip(projectId, sceneId, ext, slot)
       : R2_PREFIX.sceneImage(projectId, sceneId, ext, slot);
 
     await this.ctx.repos.assets.updateStatus(asset.id, 'downloading');

@@ -1,8 +1,13 @@
 import type { OverlaySide } from '@yulia/core';
 
 export interface RenderSegment {
-  /** Local path to the wide 16:9 background video clip. */
-  backgroundPath: string;
+  /**
+   * Local paths to the wide 16:9 background video clips, in sequence order.
+   * A scene is filled by playing these ~8s clips back-to-back (with a short
+   * crossfade) at normal speed, so it fills the scene without stretching or
+   * freezing a single clip. Always has at least one entry.
+   */
+  backgroundPaths: string[];
   /**
    * Local paths to the portrait overlay stills (the PiP "window"), in rotation
    * order. Empty for full-frame, video-only "breather" scenes. When it has 2+
