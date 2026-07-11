@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import {
   AssetKind,
   ProjectStatus,
-  overlaySide,
+  resolveOverlayPosition,
   sceneHasOverlay,
   mapLimit,
   NotFoundError,
@@ -14,6 +14,9 @@ import {
   R2_PREFIX,
   RENDER_DIMENSIONS,
   RENDER_ENCODING,
+  OverlayPosition,
+  OverlayMotion,
+  OverlayTransition,
   env,
 } from '@yulia/core';
 import type { SceneRow, Json } from '@yulia/db';
@@ -238,8 +241,11 @@ export class RenderService {
       });
 
       // Download every stored overlay slot in rotation order. A demoted scene
-      // (visual_type flipped to VIDEO) has none; a product scene has 1–2.
+      // (visual_type flipped to VIDEO) has none; a product scene has 1–2. The
+      // overlay's editing plan (position/motion/transition) lives on the active
+      // prompt's `parameters`; read it once here so the composite can honor it.
       const overlayPaths: string[] = [];
+      let overlayPlan: OverlayPlan = {};
       if (hasOverlay) {
         const overlays = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE)).filter(
           (o) => o.status === 'stored' && o.r2_key,
@@ -251,6 +257,8 @@ export class RenderService {
           overlayPaths.push(p);
           downloads.push(this.download(overlay.r2_key!, p));
         });
+        const prompt = await this.ctx.repos.prompts.getActiveByScene(scene.id);
+        overlayPlan = readOverlayPlan(prompt?.parameters);
       }
       await Promise.all(downloads);
 
@@ -264,7 +272,12 @@ export class RenderService {
       const segment: RenderSegment = {
         backgroundPaths,
         overlayPaths, // empty for full-frame video-only scenes
-        overlaySide: overlaySide(scene.scene_index),
+        // Position from the AI plan (falls back to the alternating side for scenes
+        // prompted before the plan existed). Motions align to overlayPaths by
+        // rotation slot; transition drives the window's entrance.
+        overlayPosition: resolveOverlayPosition(scene.scene_index, overlayPlan.position),
+        ...(overlayPlan.motions ? { overlayMotions: overlayPlan.motions } : {}),
+        ...(overlayPlan.transition ? { overlayTransition: overlayPlan.transition } : {}),
         displayDurationSec,
         // Only the first scene of each item carries the title card.
         ...(meta.showCard ? { titleText: meta.titleText, itemNumber: meta.itemNumber } : {}),
@@ -286,6 +299,57 @@ export class RenderService {
     const stream = await this.ctx.storage.getObjectStream(key);
     await pipeline(stream, createWriteStream(dest));
   }
+}
+
+/**
+ * The overlay editing plan read off a scene's active prompt `parameters`. All
+ * fields optional: a scene prompted before the plan existed (or where the model
+ * returned null) leaves them unset, and the renderer falls back to its
+ * deterministic defaults (alternating side, soft slow-zoom-in, crossfade).
+ */
+interface OverlayPlan {
+  position?: OverlayPosition;
+  /** Per-slot motion (index 0 = primary overlay, 1 = second rotated overlay). */
+  motions?: OverlayMotion[];
+  transition?: OverlayTransition;
+}
+
+const POSITIONS = new Set<string>(Object.values(OverlayPosition));
+const MOTIONS = new Set<string>(Object.values(OverlayMotion));
+const TRANSITIONS = new Set<string>(Object.values(OverlayTransition));
+
+/**
+ * Extract + validate the overlay editing plan from a prompt row's `parameters`
+ * jsonb. Only known enum values are accepted (anything else is ignored, so a
+ * malformed/legacy value can't reach ffmpeg). The two per-slot motions become a
+ * `motions` array aligned to the overlay rotation (slot 1 inherits slot 0 when
+ * `overlayMotion2` is absent).
+ */
+function readOverlayPlan(parameters: unknown): OverlayPlan {
+  if (!parameters || typeof parameters !== 'object') return {};
+  const p = parameters as Record<string, unknown>;
+  const plan: OverlayPlan = {};
+
+  if (typeof p.overlayPosition === 'string' && POSITIONS.has(p.overlayPosition)) {
+    plan.position = p.overlayPosition as OverlayPosition;
+  }
+  if (typeof p.overlayTransition === 'string' && TRANSITIONS.has(p.overlayTransition)) {
+    plan.transition = p.overlayTransition as OverlayTransition;
+  }
+
+  const m0 =
+    typeof p.overlayMotion === 'string' && MOTIONS.has(p.overlayMotion)
+      ? (p.overlayMotion as OverlayMotion)
+      : null;
+  const m1 =
+    typeof p.overlayMotion2 === 'string' && MOTIONS.has(p.overlayMotion2)
+      ? (p.overlayMotion2 as OverlayMotion)
+      : null;
+  // Only emit motions when the plan set at least the primary; slot 1 inherits
+  // slot 0 when no distinct second motion was chosen.
+  if (m0) plan.motions = [m0, m1 ?? m0];
+
+  return plan;
 }
 
 interface ItemMeta {

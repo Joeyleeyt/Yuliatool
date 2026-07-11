@@ -21,6 +21,57 @@ export const SceneVisualType = {
 
 export type SceneVisualType = (typeof SceneVisualType)[keyof typeof SceneVisualType];
 
+/**
+ * Where the overlay "window" sits on the frame — the editing-plan analog of the
+ * reference spec's overlay position. `left`/`right` keep the PiP window at a
+ * gutter (the presenter/focal subject stays visible on the other side); `center`
+ * is a full-width, near-full-frame overlay that intentionally REPLACES the
+ * background (lifestyle / mood / architecture beats). Chosen per-overlay by the
+ * AI plan; falls back to the alternating `overlaySide()` when unset.
+ */
+export const OverlayPosition = {
+  LEFT: 'left',
+  CENTER: 'center',
+  RIGHT: 'right',
+} as const;
+
+export type OverlayPosition = (typeof OverlayPosition)[keyof typeof OverlayPosition];
+
+/**
+ * Per-overlay camera motion (the reference spec's allowed motions). Drives how a
+ * still overlay is animated in the render (zoompan/crop expressions), replacing
+ * the previous fixed Ken Burns push-in. `static` holds still; the rest drift or
+ * zoom gently. Chosen per-overlay by the AI plan; falls back to a soft
+ * slow-zoom-in when unset (matching the old behavior).
+ */
+export const OverlayMotion = {
+  STATIC: 'static',
+  SLOW_ZOOM_IN: 'slow_zoom_in',
+  SLOW_ZOOM_OUT: 'slow_zoom_out',
+  PAN_LEFT: 'pan_left',
+  PAN_RIGHT: 'pan_right',
+  DRIFT_UP: 'drift_up',
+  DRIFT_DOWN: 'drift_down',
+} as const;
+
+export type OverlayMotion = (typeof OverlayMotion)[keyof typeof OverlayMotion];
+
+/**
+ * How an overlay enters (the reference spec's allowed transitions). The render
+ * engine already crossfades scene-to-scene; this drives the overlay window's own
+ * entrance within its scene. `crossfade`/`fade` are soft alpha fades; `hard_cut`
+ * pops in with no fade (fast product lists); `fade_to_white` flashes through a
+ * white wash (new-chapter beats). Falls back to `crossfade` when unset.
+ */
+export const OverlayTransition = {
+  CROSSFADE: 'crossfade',
+  FADE: 'fade',
+  HARD_CUT: 'hard_cut',
+  FADE_TO_WHITE: 'fade_to_white',
+} as const;
+
+export type OverlayTransition = (typeof OverlayTransition)[keyof typeof OverlayTransition];
+
 export const AssetStatus = {
   PENDING: 'pending', // no generation submitted yet
   SUBMITTED: 'submitted', // 69Labs job created, awaiting result

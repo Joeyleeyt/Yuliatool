@@ -74,7 +74,12 @@ export const REFERENCE_LUXURY_ANALYSIS: AnalysisOutput = {
   ],
 };
 
-/** A demo scene = the pipeline's scene row + its generated 69Labs prompt. */
+/**
+ * A demo scene = the pipeline's scene row + its generated 69Labs prompt. This
+ * static reference predates the overlay editing plan (position/motion/
+ * transition), so those fields are omitted here; the live renderer falls back to
+ * its deterministic defaults for any scene that doesn't carry a plan.
+ */
 export interface DemoScene {
   index: number;
   title: string;
@@ -83,7 +88,10 @@ export interface DemoScene {
   /** Content-driven, as observed in the reference (not index parity). */
   visualType: 'video' | 'image';
   narrationHint: string;
-  prompt: ScenePromptOutput;
+  prompt: Omit<
+    ScenePromptOutput,
+    'overlayPosition' | 'overlayMotion' | 'overlayMotion2' | 'overlayTransition'
+  >;
 }
 
 const NEG =

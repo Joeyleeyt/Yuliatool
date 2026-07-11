@@ -34,10 +34,12 @@ export async function compositeSegment(
   await compositeScene(
     seg.backgroundPaths,
     seg.overlayPaths,
-    seg.overlaySide,
+    seg.overlayPosition,
     out,
     { width, height, fps, durationSec: targetLen },
     undefined,
+    seg.overlayMotions,
+    seg.overlayTransition,
   );
   return out;
 }

@@ -1,4 +1,4 @@
-import { SceneVisualType } from '../enums/asset.js';
+import { SceneVisualType, OverlayPosition } from '../enums/asset.js';
 
 /**
  * Core pipeline constants. Central so the segmenter, prompt generator, worker
@@ -201,6 +201,13 @@ export const PIP_LAYOUT = {
   overlayHeightFrac: 0.62, // 62% of canvas height (leaves lower-third for the title card)
   leftXFrac: 0.08, // left window: x at 8% (hug the edge)
   rightXFrac: 0.57, // right window: x at 57% (mirror of the left gutter)
+  // CENTER overlay: a near-full-frame window that intentionally REPLACES the
+  // background (lifestyle / mood / architecture beats — see OverlayPosition).
+  // Wider + taller than the side gutter window; still inset a little so the soft
+  // rounded corners + drop shadow read against the background rather than
+  // bleeding to the canvas edge.
+  centerWidthFrac: 0.86,
+  centerHeightFrac: 0.72,
   cornerRadiusPx: 15,
   shadowOpacity: 0.2, // 20% black drop shadow
   shadowBlurPx: 24,
@@ -246,6 +253,20 @@ export type OverlaySide = 'left' | 'right';
 /** Alternate the overlay window left/right by scene ordinal for visual rhythm. */
 export function overlaySide(sceneIndex: number): OverlaySide {
   return sceneIndex % 2 === 0 ? 'left' : 'right';
+}
+
+/**
+ * Resolve the overlay window's on-frame position for a scene. Prefers the AI
+ * editing plan's chosen position (left/center/right — picked to preserve the
+ * focal subject, per the reference spec's "don't alternate mechanically" rule);
+ * falls back to the deterministic alternating `overlaySide()` when the scene was
+ * prompted before the plan existed (so old projects render unchanged).
+ */
+export function resolveOverlayPosition(
+  sceneIndex: number,
+  planned: OverlayPosition | null | undefined,
+): OverlayPosition {
+  return planned ?? overlaySide(sceneIndex);
 }
 
 /**

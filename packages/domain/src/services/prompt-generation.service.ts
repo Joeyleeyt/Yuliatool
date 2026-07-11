@@ -150,6 +150,14 @@ export class PromptGenerationService {
       ...(result.data.overlayPrompt2
         ? { overlayPrompt2: result.data.overlayPrompt2 }
         : {}),
+      // Overlay EDITING PLAN (position / motion / transition). Persisted only
+      // when the model chose a value; the renderer falls back to the
+      // deterministic side + soft-zoom defaults for scenes prompted before these
+      // fields existed (see resolveOverlayPosition / OVERLAY_MOTION_DEFAULT).
+      ...(result.data.overlayPosition ? { overlayPosition: result.data.overlayPosition } : {}),
+      ...(result.data.overlayMotion ? { overlayMotion: result.data.overlayMotion } : {}),
+      ...(result.data.overlayMotion2 ? { overlayMotion2: result.data.overlayMotion2 } : {}),
+      ...(result.data.overlayTransition ? { overlayTransition: result.data.overlayTransition } : {}),
       interstitialPrompt: interstitialPrompt(shared.anchors),
       camera: result.data.camera,
       composition: result.data.composition,

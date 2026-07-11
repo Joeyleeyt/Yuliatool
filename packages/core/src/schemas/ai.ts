@@ -88,5 +88,27 @@ export const ScenePromptSchema = z.object({
   // Strict json_schema mode requires every property present -> nullable, not
   // optional (see file header); the model returns null when it has nothing to add.
   overlayPrompt2: z.string().nullable(),
+  // --- Overlay EDITING PLAN (the reference planner's creative fields) ---------
+  // How the overlay window is placed + animated. The renderer resolves these to
+  // an actual layout box + zoompan; when the model returns null the renderer
+  // falls back to the deterministic side/soft-zoom defaults (older projects).
+  //
+  // Position: left/right keep a gutter so the focal subject stays visible;
+  // center is a near-full-frame overlay that intentionally replaces the
+  // background (lifestyle/mood/architecture beats). Chosen to avoid covering the
+  // focal subject — NOT alternated mechanically.
+  overlayPosition: z.enum(['left', 'center', 'right']).nullable(),
+  // Motion for the PRIMARY overlay (slot 0).
+  overlayMotion: z
+    .enum(['static', 'slow_zoom_in', 'slow_zoom_out', 'pan_left', 'pan_right', 'drift_up', 'drift_down'])
+    .nullable(),
+  // Motion for the SECOND overlay (slot 1); null when there's no second overlay
+  // or the model wants it to inherit the primary motion.
+  overlayMotion2: z
+    .enum(['static', 'slow_zoom_in', 'slow_zoom_out', 'pan_left', 'pan_right', 'drift_up', 'drift_down'])
+    .nullable(),
+  // How the overlay window ENTERS its scene (its own entrance, distinct from the
+  // scene-to-scene crossfade the render chain always applies).
+  overlayTransition: z.enum(['crossfade', 'fade', 'hard_cut', 'fade_to_white']).nullable(),
 });
 export type ScenePromptOutput = z.infer<typeof ScenePromptSchema>;

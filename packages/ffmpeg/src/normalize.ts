@@ -6,7 +6,9 @@ import {
   TITLE_CARD,
   COLOR_GRADE,
   BACKGROUND_CLIP,
-  type OverlaySide,
+  OverlayMotion,
+  OverlayPosition,
+  OverlayTransition,
 } from '@yulia/core';
 import { INTERMEDIATE_ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
 import { probe } from './ffprobe.js';
@@ -18,6 +20,58 @@ export interface NormalizeOpts {
   height: number;
   fps: number;
   durationSec: number;
+}
+
+/**
+ * Build the `zoompan` z/x/y expressions for one of the editing plan's overlay
+ * motions. The image is pre-scaled 1.2x (see `normalizeImageSegment`), so pans
+ * and drifts have headroom to move within the oversized frame before it's
+ * cropped back to the window size. `static` holds a fixed 1.2x crop (no drift);
+ * the zooms push in/out; the pans/drifts hold a constant zoom and travel the
+ * crop window across the oversized source.
+ *
+ * `frames` is the clip length in frames (the travel/zoom is spread across it).
+ * Returns the `z=..:x=..:y=..` fragment (without the `zoompan=` head or the
+ * trailing `:d=:s=:fps=`), so the caller composes the full filter.
+ */
+function motionZoompanExpr(motion: OverlayMotion, frames: number): string {
+  const f = Math.max(1, frames);
+  // Zoom endpoints for the push-in / pull-out motions.
+  const zHi = TRANSITION.kenBurnsZoom; // e.g. 1.12
+  const zoomInStep = ((zHi - 1) / f).toFixed(6);
+  // For pans/drifts we hold a constant, already-zoomed crop so there's slack
+  // (iw/zoom < iw) to travel; the crop window then slides edge-to-edge over `f`.
+  const hold = zHi.toFixed(4);
+  // Fraction of the available slack traversed per frame (0 -> full slack).
+  const panStep = (1 / f).toFixed(6);
+
+  switch (motion) {
+    case OverlayMotion.STATIC:
+      // Fixed centered crop at the hold zoom — no drift.
+      return `z='${hold}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`;
+    case OverlayMotion.SLOW_ZOOM_OUT:
+      // Start pushed-in, ease back out to 1.0 (centered).
+      return (
+        `z='if(lte(zoom,1.0),${hold},max(zoom-${zoomInStep},1.0))':` +
+        `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
+      );
+    case OverlayMotion.PAN_LEFT:
+      // Hold zoom; slide the crop from right edge to left edge.
+      return `z='${hold}':x='(iw-iw/zoom)*(1-on*${panStep})':y='ih/2-(ih/zoom/2)'`;
+    case OverlayMotion.PAN_RIGHT:
+      return `z='${hold}':x='(iw-iw/zoom)*(on*${panStep})':y='ih/2-(ih/zoom/2)'`;
+    case OverlayMotion.DRIFT_UP:
+      // Hold zoom; slide the crop from bottom to top.
+      return `z='${hold}':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(1-on*${panStep})'`;
+    case OverlayMotion.DRIFT_DOWN:
+      return `z='${hold}':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(on*${panStep})'`;
+    case OverlayMotion.SLOW_ZOOM_IN:
+    default:
+      // Default (and the historical Ken Burns): gentle centered push-in.
+      return (
+        `z='min(zoom+${zoomInStep},${hold})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
+      );
+  }
 }
 
 /** Optional title-card overlay: number + title burned lower-left. */
@@ -229,10 +283,12 @@ function drawtextAlphaEnvelope(appear: number, hold: number, fade: number): stri
 export async function compositeScene(
   backgroundPaths: string[],
   overlayPaths: string[],
-  side: OverlaySide,
+  position: OverlayPosition,
   output: string,
   o: NormalizeOpts,
   title?: TitleCardOpts,
+  motions?: OverlayMotion[],
+  transition: OverlayTransition = OverlayTransition.CROSSFADE,
 ): Promise<void> {
   const { width: W, height: H, fps } = o;
 
@@ -247,9 +303,19 @@ export async function compositeScene(
   // one clip; the PiP chain below consumes it exactly as it did a single source.
   const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
 
-  const ow = even(Math.round(W * PIP_LAYOUT.overlayWidthFrac));
-  const oh = even(Math.round(H * PIP_LAYOUT.overlayHeightFrac));
-  const x = Math.round(W * (side === 'left' ? PIP_LAYOUT.leftXFrac : PIP_LAYOUT.rightXFrac));
+  // Resolve the overlay window's box from the editing plan's position. `center`
+  // is a near-full-frame window (it replaces the background); left/right are the
+  // narrower gutter windows that keep the focal subject visible on the far side.
+  const isCenter = position === OverlayPosition.CENTER;
+  const ow = even(
+    Math.round(W * (isCenter ? PIP_LAYOUT.centerWidthFrac : PIP_LAYOUT.overlayWidthFrac)),
+  );
+  const oh = even(
+    Math.round(H * (isCenter ? PIP_LAYOUT.centerHeightFrac : PIP_LAYOUT.overlayHeightFrac)),
+  );
+  const x = isCenter
+    ? Math.round((W - ow) / 2)
+    : Math.round(W * (position === OverlayPosition.LEFT ? PIP_LAYOUT.leftXFrac : PIP_LAYOUT.rightXFrac));
   // Raise the window above dead-center so the lower-left title card has room.
   const y = Math.round((H - oh) / 2 - H * PIP_LAYOUT.verticalBiasFrac);
   const off = PIP_LAYOUT.shadowOffsetPx;
@@ -271,12 +337,19 @@ export async function compositeScene(
   const n = overlayPaths.length;
   const sliceLen = (ovEnd - ovStart) / n;
 
-  // Pre-render each overlay to a Ken Burns clip at window size (reuses the proven
-  // still-motion path) so each rotated image drifts gently rather than sitting static.
+  // Pre-render each overlay to a motion clip at window size (reuses the proven
+  // still-motion path) so each rotated image animates per the editing plan's
+  // chosen motion rather than sitting static. `motions[i]` aligns to the overlay
+  // by rotation index; a missing entry falls back to the default slow zoom-in.
   const overlayClips = await Promise.all(
     overlayPaths.map(async (p, i) => {
       const clip = `${output}.overlay${i}.mp4`;
-      await normalizeImageSegment(p, clip, { width: ow, height: oh, fps, durationSec: o.durationSec });
+      await normalizeImageSegment(
+        p,
+        clip,
+        { width: ow, height: oh, fps, durationSec: o.durationSec },
+        motions?.[i] ?? OverlayMotion.SLOW_ZOOM_IN,
+      );
       return clip;
     }),
   );
@@ -315,12 +388,32 @@ export async function compositeScene(
     const gate = `enable='between(t,${sStart.toFixed(3)},${sEnd.toFixed(3)})'`;
     const inIdx = overlayInputBase + i;
 
+    // The window's ENTRANCE transition (from the editing plan) applies only to
+    // the FIRST overlay slot — that's when the window enters the scene. Later
+    // slots are the in-scene rotation hand-off and always soft-crossfade.
+    //   crossfade/fade -> alpha fade up (the default)
+    //   hard_cut       -> no entrance fade (the enable gate pops it in)
+    //   fade_to_white  -> RGB fades up FROM white (a brief white wash), plus the
+    //                     alpha fade so the rounded window edge still eases in
+    const entrance = i === 0 ? transition : OverlayTransition.CROSSFADE;
+    const fin = PIP_LAYOUT.fadeInSec;
+    const whiteWash =
+      entrance === OverlayTransition.FADE_TO_WHITE
+        ? `fade=t=in:st=${sStart.toFixed(3)}:d=${fin}:color=white,`
+        : '';
+    const alphaFadeIn =
+      entrance === OverlayTransition.HARD_CUT
+        ? ''
+        : `fade=t=in:st=${sStart.toFixed(3)}:d=${fin}:alpha=1,`;
+
     parts.push(
       `[${shadowIdx}:v]format=rgba[shadowsrc${i}]`,
       `[${maskIdx}:v]format=gray[mask${i}]`,
-      `[${inIdx}:v]format=rgba[ovlrgb${i}]`,
+      // White-wash (if any) is applied to the RGB before alphamerge so it tints
+      // the image itself; the alpha fades handle the rounded window edge.
+      `[${inIdx}:v]${whiteWash}format=rgba[ovlrgb${i}]`,
       `[ovlrgb${i}][mask${i}]alphamerge,` +
-        `fade=t=in:st=${sStart.toFixed(3)}:d=${PIP_LAYOUT.fadeInSec}:alpha=1,` +
+        `${alphaFadeIn}` +
         `fade=t=out:st=${fadeOutAt}:d=${PIP_LAYOUT.fadeOutSec}:alpha=1,setsar=1[ovl${i}]`,
       `[${prev}][shadowsrc${i}]overlay=x=${x + off}:y=${y + off}:${gate}[bgs${i}]`,
       // The last composite also gets the title-card chain + output format/label.
@@ -413,24 +506,25 @@ export async function normalizeVideoSegment(
 }
 
 /**
- * Turn a still image into a `durationSec` clip with a slow Ken Burns push-in.
- * Pre-scales larger than target so zoompan has headroom to pan without edges.
+ * Turn a still image into a `durationSec` clip with the editing plan's chosen
+ * camera `motion` (defaults to a slow zoom-in — the historical Ken Burns). Pre-
+ * scales 1.2x larger than target so zoompan has headroom to zoom/pan/drift
+ * without exposing edges.
  */
 export async function normalizeImageSegment(
   input: string,
   output: string,
   o: NormalizeOpts,
+  motion: OverlayMotion = OverlayMotion.SLOW_ZOOM_IN,
 ): Promise<void> {
   const frames = Math.max(1, Math.round(o.durationSec * o.fps));
   const overW = Math.round(o.width * 1.2);
   const overH = Math.round(o.height * 1.2);
-  const zoomStep = ((TRANSITION.kenBurnsZoom - 1) / frames).toFixed(6);
 
   const vf = [
     `scale=${overW}:${overH}:force_original_aspect_ratio=increase`,
     `crop=${overW}:${overH}`,
-    `zoompan=z='min(zoom+${zoomStep},${TRANSITION.kenBurnsZoom})':d=${frames}:` +
-      `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${o.width}x${o.height}:fps=${o.fps}`,
+    `zoompan=${motionZoompanExpr(motion, frames)}:d=${frames}:s=${o.width}x${o.height}:fps=${o.fps}`,
     'setsar=1',
     `format=${RENDER_ENCODING.pixelFormat}`,
   ].join(',');

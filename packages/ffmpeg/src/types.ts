@@ -1,4 +1,4 @@
-import type { OverlaySide } from '@yulia/core';
+import type { OverlayPosition, OverlayMotion, OverlayTransition } from '@yulia/core';
 
 export interface RenderSegment {
   /**
@@ -14,8 +14,20 @@ export interface RenderSegment {
    * entries the window rotates through them within the scene (~5–8s each).
    */
   overlayPaths: string[];
-  /** Which side the overlay window sits on for this scene. */
-  overlaySide: OverlaySide;
+  /**
+   * Where the overlay window sits for this scene, from the AI editing plan
+   * (resolved via `resolveOverlayPosition`, so scenes prompted before the plan
+   * existed still alternate left/right). `center` renders a near-full-frame
+   * window that intentionally replaces the background.
+   */
+  overlayPosition: OverlayPosition;
+  /**
+   * Per-overlay camera motion, aligned to `overlayPaths` by index. A missing
+   * entry (or an empty array) falls back to the default soft slow-zoom-in.
+   */
+  overlayMotions?: OverlayMotion[];
+  /** How the overlay window ENTERS its scene (defaults to crossfade). */
+  overlayTransition?: OverlayTransition;
   /** On-screen duration this segment must occupy for audio sync. */
   displayDurationSec: number;
   /**
