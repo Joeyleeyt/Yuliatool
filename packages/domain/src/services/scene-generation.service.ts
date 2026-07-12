@@ -4,6 +4,7 @@ import {
   QueueName,
   PIP_LAYOUT,
   INTERSTITIAL_SEED_KEY,
+  INTERSTITIAL_VARIANTS,
   sceneHasOverlay,
   overlayCountForDuration,
   backgroundClipCountForDuration,
@@ -22,7 +23,7 @@ import {
   type GenerationResult,
 } from '@yulia/services';
 import type { AppContext } from '../context.js';
-import { seedFrom } from '../ai/index.js';
+import { seedFrom, withRealismPreamble } from '../ai/index.js';
 
 const CONTENT_TYPE: Record<GenerationKind, string> = {
   video: 'video/mp4',
@@ -123,7 +124,7 @@ export class SceneGenerationService {
           sceneId,
           'video',
           slot,
-          this.backgroundRequest(projectId, sceneId, prompt, hasOverlay, slot),
+          this.backgroundRequest(projectId, sceneId, scene.scene_index, prompt, hasOverlay, slot),
           slot * SUBMIT_STAGGER_MS,
         ),
       );
@@ -275,6 +276,7 @@ export class SceneGenerationService {
   private backgroundRequest(
     projectId: string,
     sceneId: string,
+    sceneIndex: number,
     prompt: PromptRow,
     hasOverlay: boolean,
     slot: number,
@@ -288,21 +290,28 @@ export class SceneGenerationService {
     const seedParts = slot === 0 ? [] : [String(slot)];
     if (hasOverlay) {
       return {
-        prompt: prompt.positive_prompt,
+        // Lead every submission with the realism/physics/anatomy preamble so the
+        // model obeys real-world physics before the scene description.
+        prompt: withRealismPreamble(prompt.positive_prompt),
         ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
         aspectRatio,
         seed: seedFrom(projectId, sceneId, 'video', ...seedParts),
       };
     }
-    // Shared recurring interstitial: same prompt across all video-only scenes.
-    // The seed still varies by slot so a multi-clip interstitial isn't the same
-    // 8s looped, while slot 0 stays the shared establishing look.
+    // Recurring interstitial: same prompt across all video-only scenes so the
+    // breathers share an establishing WORLD — but rotate among a small SET of
+    // seeds (by scene ordinal) rather than one identical seed, so a run of
+    // consecutive breathers recurs a small family of looks instead of the exact
+    // same 8s clip repeated (which read as "looping with one scene"). The prompt
+    // is unchanged, so all variants stay in the same grade/world; only the seed
+    // differs. `sceneIndex` is stable per scene, so re-submits reconcile.
     const interstitial = asString(params.interstitialPrompt, prompt.positive_prompt);
+    const variant = String(sceneIndex % INTERSTITIAL_VARIANTS);
     return {
-      prompt: interstitial,
+      prompt: withRealismPreamble(interstitial),
       ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
       aspectRatio,
-      seed: seedFrom(projectId, INTERSTITIAL_SEED_KEY, 'video', ...seedParts),
+      seed: seedFrom(projectId, INTERSTITIAL_SEED_KEY, 'video', variant, ...seedParts),
     };
   }
 
@@ -324,7 +333,7 @@ export class SceneGenerationService {
     const overlayPrompt = slot === 0 ? primary : asString(params.overlayPrompt2, primary);
     const overlayNegative = asString(params.overlayNegativePrompt, '');
     return {
-      prompt: overlayPrompt,
+      prompt: withRealismPreamble(overlayPrompt),
       ...(overlayNegative ? { negativePrompt: overlayNegative } : {}),
       aspectRatio: asString(params.overlayAspectRatio, PIP_LAYOUT.overlayAspectRatio),
       // Slot in the seed so each overlay is a distinct image (slot 0 keeps the

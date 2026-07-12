@@ -74,4 +74,30 @@ export const HOUSE_STYLE = {
     // --- jewelry defects ---
     'broken jewelry, deformed metal, melted gemstones, asymmetric earrings, extra prongs, ' +
     'malformed clasp, warped ring, distorted bracelet',
+
+  /**
+   * Positive realism preamble PREPENDED to every generation's positive prompt
+   * (video + image) right before submission. Negatives alone don't fully stop
+   * the physics/anatomy failures the client flagged ("three hands", objects
+   * merging, clipping) — a strong positive instruction to obey real-world
+   * physics and anatomy pushes the model harder than the same terms phrased as
+   * negatives. Kept as a single dense paragraph the scene's own prompt is
+   * appended to (see withRealismPreamble). Client-supplied wording, preserved
+   * verbatim so the exact phrasing they validated is what ships.
+   */
+  realismPreamble:
+    'Ultra-realistic, physically accurate, photorealistic cinematic scene. Strictly follow ' +
+    'real-world physics and object interactions. Maintain consistent character identity, ' +
+    'anatomy, proportions, clothing, and environment throughout the entire generation. No extra ' +
+    'fingers, extra limbs, duplicate body parts, deformed hands, distorted faces, asymmetrical ' +
+    'eyes, unnatural expressions, warped features, or incorrect anatomy. No floating, melting, ' +
+    'morphing, stretching, clipping, merging, or disappearing objects. No objects passing through ' +
+    'each other. All objects must remain solid, separate, and maintain consistent size, shape, ' +
+    'position, and material properties. Human hands must have exactly five fingers with natural ' +
+    'movements and realistic grasping. All hand-object interactions must be physically correct, ' +
+    'with proper contact, weight, and motion. Maintain stable backgrounds, consistent lighting, ' +
+    'accurate shadows, reflections, and perspective. No flickering, jitter, frame-to-frame ' +
+    'inconsistencies, sudden transformations, or abrupt appearance/disappearance of objects. ' +
+    'Ensure smooth, coherent motion, realistic physics, natural movements, and continuity across ' +
+    'all frames. High-detail, cinematic, ultra-photorealistic quality.',
 } as const;

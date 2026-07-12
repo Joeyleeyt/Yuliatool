@@ -234,13 +234,21 @@ export const PIP_LAYOUT = {
 
 /**
  * Recurring "interstitial" background: all full-frame (video-only) scenes share
- * ONE establishing/breather look — the way the reference reuses its peony
- * establishing shot between items. Achieved without an asset-dedup migration by
- * giving every video-only scene the SAME prompt + SAME generation seed, so the
- * provider yields visually consistent recurring footage. `interstitialSeedKey`
- * is passed to `seedFrom` in place of the per-scene id for these scenes.
+ * the same establishing/breather PROMPT — the way the reference reuses its peony
+ * establishing shot between items — so they stay in one world/grade. But instead
+ * of one identical seed (which made a run of consecutive breathers the exact
+ * same 8s clip repeated — "looping with one scene"), the seed rotates across
+ * INTERSTITIAL_VARIANTS values by scene ordinal, so the breathers recur a small
+ * FAMILY of establishing looks rather than a single frozen clip.
  */
 export const INTERSTITIAL_SEED_KEY = 'interstitial';
+
+/**
+ * How many distinct establishing-look variants the recurring interstitial
+ * rotates through (by scene ordinal). Small so the breathers still read as one
+ * recurring world, but > 1 so consecutive breathers aren't the identical clip.
+ */
+export const INTERSTITIAL_VARIANTS = 3;
 
 export type OverlaySide = 'left' | 'right';
 

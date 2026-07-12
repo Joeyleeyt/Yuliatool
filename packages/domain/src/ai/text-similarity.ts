@@ -61,3 +61,27 @@ export function mostSimilar<T>(
   }
   return best;
 }
+
+/**
+ * The top-`k` candidates by similarity to `target`, best first, excluding any
+ * with zero overlap. Used by the borrow-fallback so a RUN of scenes that all
+ * need to borrow (e.g. a whole topic whose narration is near-identical) can
+ * spread across several similar donors instead of every scene collapsing onto
+ * the single best one — which produced a long stretch of ONE repeated clip
+ * ("looping with one scene"). Ties resolve to the earliest candidate.
+ */
+export function topSimilar<T>(
+  target: string,
+  candidates: readonly T[],
+  textOf: (c: T) => string,
+  k: number,
+): { item: T; score: number }[] {
+  const scored: { item: T; score: number }[] = [];
+  for (const c of candidates) {
+    const score = narrationSimilarity(target, textOf(c));
+    if (score > 0) scored.push({ item: c, score });
+  }
+  // Stable-ish sort: higher score first; equal scores keep input order.
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.max(1, k));
+}

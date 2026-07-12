@@ -20,7 +20,15 @@ import {
 } from '@yulia/services';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
-import { mostSimilar } from '../ai/index.js';
+import { topSimilar } from '../ai/index.js';
+
+/**
+ * How many of the most-similar donor backgrounds the borrow-fallback spreads a
+ * run of borrows across (rotated by scene ordinal), so a topic whose scenes all
+ * borrow doesn't collapse onto one repeated clip. Small so the stand-in still
+ * fits the narration, but >1 so consecutive borrows differ.
+ */
+const BORROW_SPREAD_K = 4;
 
 /**
  * Download stage: stream the provider's generated result into R2 and mark the
@@ -192,16 +200,28 @@ export class DownloadAssetsService {
     }
     if (donors.length === 0) return null;
 
-    // Tier 1: most-similar by narration (only when there's real overlap).
+    // Tier 1: similar by narration — but SPREAD across the top matches, not
+    // always the single best. A whole topic (e.g. the perfume section) has
+    // near-identical narration across its scenes, so if every borrowing scene
+    // picked the one top donor, that stretch became ONE clip repeated for a
+    // minute ("looping with one scene"). Instead, take the top-K similar donors
+    // and rotate among them by this scene's ordinal, so consecutive borrows land
+    // on DIFFERENT clips and the section stays visually varied.
     const target = scene.narration_text ?? scene.title ?? '';
-    const best = mostSimilar(target, donors, (d) => d.scene.narration_text ?? d.scene.title ?? '');
+    const top = topSimilar(
+      target,
+      donors,
+      (d) => d.scene.narration_text ?? d.scene.title ?? '',
+      BORROW_SPREAD_K,
+    );
 
     let chosen: { scene: SceneRow; assetId: string };
     let via: 'similar' | 'breather' | 'any';
     let score: number;
-    if (best) {
-      chosen = best.item;
-      score = best.score;
+    if (top.length > 0) {
+      const pick = top[scene.scene_index % top.length]!;
+      chosen = pick.item;
+      score = pick.score;
       via = 'similar';
     } else {
       // Tier 2: a full-frame breather (video-only) scene — the shared

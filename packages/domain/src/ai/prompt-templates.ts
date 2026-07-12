@@ -233,6 +233,21 @@ export function mergeNegativePrompt(sceneNegative: string): string {
   return parts.join(', ');
 }
 
+/**
+ * Prepend the global realism/physics/anatomy preamble to a scene's positive
+ * prompt, so every submission (video + image) leads with the strong "obey real
+ * physics, correct anatomy" instruction before the scene-specific description.
+ * Applied at submission time (see SceneGenerationService) so it also covers the
+ * shared interstitial and borrowed-donor prompts, not just newly-generated ones.
+ * Idempotent: skips if the preamble is already present (a re-submit of an
+ * already-prefixed prompt won't double it).
+ */
+export function withRealismPreamble(scenePrompt: string): string {
+  const body = scenePrompt.trim();
+  if (body.startsWith(HOUSE_STYLE.realismPreamble)) return body;
+  return `${HOUSE_STYLE.realismPreamble}\n\n${body}`;
+}
+
 /** Aspect ratio string for the render orientation, passed through to 69Labs. */
 export function aspectRatioFor(renderFormat: string): string {
   return renderFormat === 'horizontal_1920x1080' ? '16:9' : '9:16';
