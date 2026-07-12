@@ -38,6 +38,19 @@ export interface ProviderGeneration {
   raw: unknown;
 }
 
+/** Live per-window credit quota for a kind (from GET /models). */
+export interface ProviderCredits {
+  used: number;
+  /** Total credits in the window (e.g. 100 for video). 0 if unknown. */
+  limit: number;
+  /** Credits left in the current window. */
+  remaining: number;
+  /** ISO timestamp when the window resets, or null if the API didn't report it. */
+  resetsAt: string | null;
+  /** Credits one generation of the submit model costs (>=1). */
+  costPerGen: number;
+}
+
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
@@ -107,6 +120,38 @@ export class SixtyNineLabsClient {
   async getGeneration(kind: GenerationKind, id: string): Promise<ProviderGeneration> {
     const json = await this.request('GET', `/${this.resource(kind)}/status/${encodeURIComponent(id)}`);
     return this.normalize(kind, json);
+  }
+
+  /**
+   * Live credit quota for a kind, read from GET /models. 69Labs enforces a
+   * per-window credit budget (e.g. 100 video credits) that resets on a clock
+   * boundary; the response carries `{kind}.credits = {used, limit, remaining,
+   * resetsAt}` and each model's per-generation `cost`. The credit-aware
+   * submission throttle (see CreditThrottle) polls this so it paces submits
+   * against the REAL remaining budget instead of a hardcoded guess — and because
+   * every worker instance reads the same provider-side counter, the pacing is
+   * correct across multiple machines without shared client state.
+   */
+  async getCredits(kind: GenerationKind): Promise<ProviderCredits> {
+    const json = (await this.request('GET', '/models')) as Record<string, unknown>;
+    const section = (json?.[this.resource(kind)] ?? {}) as Record<string, unknown>;
+    const credits = (section.credits ?? {}) as Record<string, unknown>;
+    const models = Array.isArray(section.models) ? (section.models as Record<string, unknown>[]) : [];
+    // Cost of the model we actually submit with: the configured override, else
+    // the account default; fall back to 1 credit if the model isn't listed.
+    const wantId =
+      (kind === 'video' ? env.SIXTYNINE_LABS_VIDEO_MODEL : env.SIXTYNINE_LABS_IMAGE_MODEL) ??
+      (typeof section.defaultModelId === 'string' ? section.defaultModelId : undefined);
+    const model = models.find((m) => m.id === wantId) ?? models[0];
+    const costPerGen = model && typeof model.cost === 'number' ? model.cost : 1;
+
+    return {
+      used: numberOr(credits.used, 0),
+      limit: numberOr(credits.limit, 0),
+      remaining: numberOr(credits.remaining, 0),
+      resetsAt: typeof credits.resetsAt === 'string' ? credits.resetsAt : null,
+      costPerGen: costPerGen > 0 ? costPerGen : 1,
+    };
   }
 
   /**
@@ -271,6 +316,10 @@ function concurrencyLimitDelayMs(attempt: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function numberOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
 function mapStatus(raw: unknown): GenerationStatus {

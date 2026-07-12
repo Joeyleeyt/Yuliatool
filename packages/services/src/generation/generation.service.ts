@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
-import { env, ExternalServiceError } from '@yulia/core';
+import { env, ExternalServiceError, createLogger } from '@yulia/core';
 import { SixtyNineLabsClient, type CreateGenerationBody } from './sixtynine-labs.client.js';
+import { CreditThrottle } from './credit-throttle.js';
 import type {
   GenerationKind,
   GenerationRequest,
@@ -8,6 +9,26 @@ import type {
   GenerationService,
   GenerationSubmission,
 } from './types.js';
+
+const throttleLog = createLogger({ component: 'credit-throttle' });
+
+/**
+ * One shared credit throttle per kind, per worker process. Sharing across all
+ * concurrent scenes in this instance means they pace against ONE view of the
+ * remaining budget (rather than each fetching/reserving independently); every
+ * instance reads the same provider-side counter, so pacing stays correct across
+ * machines too. Lazily created so a process that never generates (e.g. web)
+ * doesn't build one.
+ */
+const throttles: Partial<Record<GenerationKind, CreditThrottle>> = {};
+function throttleFor(kind: GenerationKind, client: SixtyNineLabsClient): CreditThrottle {
+  return (throttles[kind] ??= new CreditThrottle(kind, client, (info) =>
+    throttleLog.warn(
+      { kind, ...info, waitSec: Math.round(info.waitMs / 1000) },
+      'credit budget exhausted — pausing new submits until window reset',
+    ),
+  ));
+}
 
 /**
  * Base 69Labs generation service. Video/image differ by `kind` (which selects
@@ -24,8 +45,20 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
   protected abstract buildBody(req: GenerationRequest): CreateGenerationBody;
 
   async submit(req: GenerationRequest): Promise<GenerationSubmission> {
-    const gen = await this.client.createGeneration(this.kind, this.buildBody(req));
-    return { externalId: gen.id, status: gen.status };
+    // Pace against the live per-window credit budget so the pipeline doesn't
+    // burst past 69Labs' quota and 403 every remaining scene. acquire() blocks
+    // (up to the window reset) until there's budget and reserves one gen's cost.
+    const { release } = await throttleFor(this.kind, this.client).acquire();
+    try {
+      const gen = await this.client.createGeneration(this.kind, this.buildBody(req));
+      return { externalId: gen.id, status: gen.status };
+    } catch (err) {
+      // The submit failed, so no credit was actually consumed by a created job —
+      // release the reservation so a transient error (network, 5xx, concurrency
+      // 403) doesn't leak budget and needlessly throttle later submits.
+      release();
+      throw err;
+    }
   }
 
   async poll(externalId: string): Promise<GenerationResult> {
