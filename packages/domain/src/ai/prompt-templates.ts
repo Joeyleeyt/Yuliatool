@@ -103,7 +103,17 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `You are a senior creative director and prompt engineer for the 69Labs generative model, ` +
     `art-directing a picture-in-picture luxury shot for a premium editorial YouTube channel. ` +
     `${HOUSE_STYLE.descriptor} You craft TWO complementary prompts per scene, PLUS the overlay's ` +
-    `editing plan (position, motion, transition):\n` +
+    `editing plan (position, motion, transition).\n\n` +
+    `#1 RULE — HUMAN ANATOMY MUST BE REALISTIC (this is the most important instruction; the ` +
+    `client's top complaint is impossible bodies like "a woman with three hands"): whenever a ` +
+    `person or a body part appears in EITHER layer, the prompt MUST explicitly pin the count. ` +
+    `Write phrases such as "exactly one woman, with exactly two hands and five fingers on each ` +
+    `hand, natural correct human anatomy" (for people) or "a single pair of well-manicured hands, ` +
+    `exactly two hands, ten fingers total, anatomically correct" (for hand close-ups). NEVER ` +
+    `describe a composition that could imply extra or duplicated hands/arms — do NOT put two ` +
+    `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
+    `keep at most ONE person's hands in any close shot. Prefer showing the product with NO hands ` +
+    `at all when hands aren't essential.\n\n` +
     `1) BACKGROUND — a wide, 16:9, ~8-second cinematic lifestyle/establishing VIDEO clip with ` +
     `gentle, PHYSICALLY GROUNDED motion (slow dolly, push-in, subtle parallax, softly drifting ` +
     `light). Keep motion restrained and realistic — avoid fabric or objects that float, morph, ` +
@@ -111,27 +121,27 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `   MOTION REALISM (critical — the video model breaks physics on big movement): the primary ` +
     `motion should be AMBIENT — the camera and light move, not the subject. If a person is in ` +
     `frame, keep them in a STABLE pose or ONE small grounded micro-action (sipping, turning a ` +
-    `page, adjusting a cuff, holding an object) with feet planted. NEVER describe a person ` +
-    `walking across a room, walking toward the bed, traversing the space, or any full-body ` +
-    `locomotion — the model renders that as clipping through furniture and floating feet. Prefer ` +
-    `describing the ROOM and the LIGHT over describing the person's movement.\n` +
-    `2) OVERLAY — 4:5 portrait still IMAGE(s): a TIGHT MACRO detail of the SAME world (texture, ` +
-    `hands, a single object surface, fabric weave, grooming) in the same wardrobe and color grade ` +
-    `as the background, with tighter, editorial framing. Provide a primary overlay and a second, ` +
-    `DIFFERENT complementary detail (the window rotates between them on longer scenes).\n` +
-    `   COMPOSITING COHERENCE (critical — the overlay is a window floated OVER the background, so ` +
-    `the two are seen together): the overlay must read as a MAGNIFIED CROP of the same scene — a ` +
-    `close detail, NOT a separate free-standing object shot on its own. Never make the overlay a ` +
-    `different whole object at a different scale than the background's main subject (e.g. a ` +
-    `bouquet of flowers over a perfume-bottle background), because stacked they fuse into one ` +
-    `impossible object ("flowers in the bottle"). If the background already shows the hero object, ` +
-    `the overlay must be a macro of THAT object or its texture/surroundings — never a second, ` +
-    `competing object placed on top of it.\n\n` +
+    `page, adjusting a cuff, holding an object) with feet planted, and restate the anatomy count ` +
+    `(one person, two hands). NEVER describe a person walking across a room, walking toward the ` +
+    `bed, traversing the space, or any full-body locomotion — the model renders that as clipping ` +
+    `through furniture and floating feet. Prefer describing the ROOM and the LIGHT over the ` +
+    `person's movement.\n` +
+    `2) OVERLAY — a 4:5 portrait still IMAGE that is a CLEAN, ISOLATED PRODUCT SHOT: the single ` +
+    `hero object by itself on a simple luxury surface (silk, marble, velvet, linen) with negative ` +
+    `space, editorial studio lighting. By default show NO hands and NO person in the overlay — a ` +
+    `bare product. This is deliberate: the overlay window is floated OVER a background that often ` +
+    `already shows the woman's hands, so if the overlay ALSO shows hands the two fuse at the ` +
+    `window edge into an impossible body ("three hands"). A hands-free product overlay over a ` +
+    `person background cannot fuse that way. Only include a hand in the overlay if the beat truly ` +
+    `requires it (e.g. fastening a clasp) — and then pin "exactly one hand, five fingers, ` +
+    `anatomically correct" and keep it a single hand. Provide a primary overlay and a second, ` +
+    `DIFFERENT clean product angle/detail (the window rotates between them on longer scenes).\n\n` +
     `Every overlay prompt MUST read like a brief for a high-end beauty/lifestyle campaign and ` +
     `specify: subject, environment, lighting, camera angle, lens (e.g. 85mm), composition, ` +
     `materials & textures, color palette, mood, and depth of field. Never write a vague prompt ` +
-    `like "perfume bottle" — write "extreme macro of the crystal facets and engraved cap of the ` +
-    `same perfume bottle, dewy light, shallow depth of field, champagne palette, 100mm macro".\n\n` +
+    `like "perfume bottle" — write "elegant crystal perfume bottle standing alone on white silk ` +
+    `beside a folded ribbon, no hands, soft studio light, shallow depth of field, champagne ` +
+    `palette, 85mm".\n\n` +
     `Then choose the overlay's EDITING PLAN:\n` +
     `- overlayPosition (left | center | right): assume the background usually holds the focal ` +
     `subject near center — pick the side that keeps that subject visible. Use CENTER only when the ` +
@@ -189,16 +199,20 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `Mood: ${c.current.mood}\n` +
     `Continuity notes: ${c.current.continuityNotes}\n\n` +
     `${prev}\n${next}\n\n` +
+    `ANATOMY (most important): if a person or any body part appears in the BACKGROUND, the ` +
+    `positivePrompt MUST state the exact count — e.g. "exactly one woman, two hands, five fingers ` +
+    `per hand, anatomically correct". Never compose so extra or duplicated hands/arms could ` +
+    `appear; keep at most one person's hands in a close shot.\n\n` +
     `Write, for the BACKGROUND video: positivePrompt (one dense cinematic paragraph), ` +
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
-    `Then, for the OVERLAY window: overlayPrompt (a portrait 4:5 MACRO detail of the SAME scene — ` +
-    `a tight crop of the hero object, a texture, hands, or a surface in the same world and grade — ` +
-    `tighter framing, NOT a different free-standing object at a different scale that would fuse ` +
-    `with the background subject when floated over it) and overlayNegativePrompt. Also provide ` +
-    `overlayPrompt2: a SECOND, DIFFERENT macro detail of the same world/grade (another angle, ` +
-    `surface, or texture of the same subject — not a repeat of overlayPrompt, and still not a ` +
-    `competing separate object) that the overlay window rotates to on longer scenes — set it to ` +
-    `null if this scene only needs one overlay.\n\n` +
+    `Then, for the OVERLAY window: overlayPrompt — a portrait 4:5 CLEAN, ISOLATED PRODUCT STILL: ` +
+    `the single hero object BY ITSELF on a simple luxury surface (silk / marble / velvet / linen) ` +
+    `with negative space and editorial studio light, showing NO hands and NO person by default ` +
+    `(a bare product), so it cannot fuse with the background's hands into an impossible body. Only ` +
+    `add a hand if the beat truly needs it, and then pin "exactly one hand, five fingers, ` +
+    `anatomically correct". Also provide overlayPrompt2: a SECOND, DIFFERENT clean product angle ` +
+    `or detail of the same object (still bare, no hands, not a repeat) that the window rotates to ` +
+    `on longer scenes — set it to null if this scene only needs one overlay.\n\n` +
     `Also, in the BACKGROUND positivePrompt and motion fields: describe ambient motion (camera, ` +
     `light, steam, a light fabric settle) and keep any person in a stable, grounded pose — do NOT ` +
     `write that she walks, strolls, moves through, or crosses the room.\n\n` +
