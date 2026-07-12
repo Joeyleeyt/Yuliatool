@@ -24,6 +24,12 @@ export interface StatusView {
   completedScenes: number;
   progress: number;
   errorMessage: string | null;
+  /** When the pipeline started (project creation). ISO 8601. */
+  startedAt: string;
+  /** When the project reached COMPLETED, or null while running. ISO 8601. */
+  completedAt: string | null;
+  /** Total generation seconds once COMPLETED; null while running (UI ticks live). */
+  durationSec: number | null;
 }
 
 export interface SceneView extends SceneRow {

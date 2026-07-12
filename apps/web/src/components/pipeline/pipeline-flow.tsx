@@ -1,35 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { RotateCw, AlertCircle } from 'lucide-react';
 import { useProjectStatus, useRetryProject } from '@/lib/query/hooks';
 import { PIPELINE_STAGES, stageIndexForStatus } from './stages';
 import { PipelineNode, type NodeState } from './pipeline-node';
 import { ProgressIndicator } from './progress-indicator';
+import { GenerationTimer } from './generation-timer';
 import { Badge, Button } from '@/components/ui/primitives';
 import { PROJECT_STATUS_META } from '@yulia/core/enums';
 
-function elapsedLabel(fromIso?: string): string {
-  if (!fromIso) return '—';
-  const s = Math.max(0, Math.floor((Date.now() - new Date(fromIso).getTime()) / 1000));
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h ${m % 60}m`;
-  if (m > 0) return `${m}m ${s % 60}s`;
-  return `${s}s`;
-}
-
-export function PipelineFlow({ id, createdAt }: { id: string; createdAt?: string }) {
+export function PipelineFlow({ id }: { id: string }) {
   const { data } = useProjectStatus(id);
   const retry = useRetryProject(id);
-  const [, tick] = useState(0);
 
   const running = data ? !['completed', 'failed', 'created'].includes(data.status) : false;
-  useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, [running]);
 
   if (!data) return null;
 
@@ -86,9 +70,14 @@ export function PipelineFlow({ id, createdAt }: { id: string; createdAt?: string
             {meta?.label ?? data.status}
             {data.totalScenes > 0 && ` · ${data.completedScenes}/${data.totalScenes} scenes ready`}
           </p>
-          <p className="mt-0.5 font-mono text-xs text-fg-subtle">
-            {running ? `Elapsed ${elapsedLabel(createdAt)}` : completed ? 'Rendered & ready' : ''}
-          </p>
+          <div className="mt-1">
+            <GenerationTimer
+              startedAt={data.startedAt}
+              completedAt={data.completedAt}
+              durationSec={data.durationSec}
+              running={running}
+            />
+          </div>
         </div>
       </div>
 

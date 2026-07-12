@@ -156,6 +156,11 @@ create table public.projects (
   error_message     text,
   failed_at         timestamptz,
 
+  -- When the project reached COMPLETED. Total generation time =
+  -- completed_at - created_at. Cleared if the project leaves COMPLETED (retry),
+  -- so it always reflects the current completed run (see applyStatus).
+  completed_at      timestamptz,
+
   -- Free-form config snapshot (style overrides, model choices) captured at run.
   config            jsonb not null default '{}'::jsonb,
 

@@ -1,4 +1,5 @@
-import type { ProjectStatus, RenderFormat } from '@yulia/core';
+import { ProjectStatus } from '@yulia/core';
+import type { RenderFormat } from '@yulia/core';
 import type { Sql } from '../client.js';
 import type { ProjectRow } from '../types/index.js';
 import { BaseRepository } from './base.repository.js';
@@ -84,12 +85,17 @@ export class ProjectRepository extends BaseRepository<ProjectRow> {
 
   /** Persist a status transition + optional failure fields (validation is the domain layer's job). */
   async applyStatus(id: string, update: StatusUpdate): Promise<ProjectRow | null> {
+    // Stamp completed_at when (and only when) the project reaches COMPLETED;
+    // clear it on any other status so a retry that leaves COMPLETED resets the
+    // duration. Uses the DB clock (now()) so the timestamp is authoritative.
+    const isCompleted = update.status === ProjectStatus.COMPLETED;
     const rows = await this.sql<ProjectRow[]>`
       update projects set
         status = ${update.status},
         error_code = ${update.errorCode ?? null},
         error_message = ${update.errorMessage ?? null},
-        failed_at = ${update.failedAt ?? null}
+        failed_at = ${update.failedAt ?? null},
+        completed_at = ${isCompleted ? this.sql`now()` : this.sql`null`}
       where id = ${id}
       returning *`;
     return rows[0] ?? null;

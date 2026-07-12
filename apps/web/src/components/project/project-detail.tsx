@@ -96,7 +96,7 @@ export function ProjectDetail({ id }: { id: string }) {
         <FadeUp delay={0.05} className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div className="flex flex-col gap-6">
             {completed && <VideoPlayer id={id} title={project.title} />}
-            <PipelineFlow id={id} createdAt={project.created_at} />
+            <PipelineFlow id={id} />
           </div>
           <aside className="flex flex-col gap-6">
             <CostSummary id={id} />

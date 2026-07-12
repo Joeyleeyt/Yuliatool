@@ -50,6 +50,8 @@ export interface ProjectRow extends BaseRow {
   error_code: string | null;
   error_message: string | null;
   failed_at: ISODateTime | null;
+  /** When the project reached COMPLETED; null while running or after a retry. */
+  completed_at: ISODateTime | null;
   config: Json;
 }
 

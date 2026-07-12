@@ -17,6 +17,16 @@ export interface StatusView {
   completedScenes: number;
   progress: number;
   errorMessage: string | null;
+  /** When the pipeline started (project creation). ISO 8601. */
+  startedAt: string;
+  /** When the project reached COMPLETED, or null while still running. ISO 8601. */
+  completedAt: string | null;
+  /**
+   * Total generation wall-clock in seconds once COMPLETED (completedAt −
+   * startedAt); null while running — the UI ticks a live elapsed from startedAt
+   * against the current time in that case.
+   */
+  durationSec: number | null;
 }
 
 export interface SceneView extends SceneRow {
@@ -56,12 +66,22 @@ export class ProjectReadService {
 
   async status(projectId: string, ownerId: string): Promise<StatusView> {
     const project = await this.projects.get(projectId, ownerId);
+    const startedAt = project.created_at;
+    const completedAt =
+      project.status === ProjectStatus.COMPLETED ? project.completed_at : null;
+    const durationSec =
+      completedAt != null
+        ? Math.max(0, Math.round((Date.parse(completedAt) - Date.parse(startedAt)) / 1000))
+        : null;
     return {
       status: project.status,
       totalScenes: project.total_scenes,
       completedScenes: project.completed_scenes,
       progress: computeProgress(project),
       errorMessage: project.error_message,
+      startedAt,
+      completedAt,
+      durationSec,
     };
   }
 
