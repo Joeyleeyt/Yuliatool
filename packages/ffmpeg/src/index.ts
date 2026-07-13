@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './ffprobe.js';
+export * from './frame-grab.js';
 export * from './ffmpeg-runner.js';
 export * from './normalize.js';
 export * from './pip-masks.js';

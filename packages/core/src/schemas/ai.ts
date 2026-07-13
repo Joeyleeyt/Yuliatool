@@ -112,3 +112,17 @@ export const ScenePromptSchema = z.object({
   overlayTransition: z.enum(['crossfade', 'fade', 'hard_cut', 'fade_to_white']).nullable(),
 });
 export type ScenePromptOutput = z.infer<typeof ScenePromptSchema>;
+
+// --- Hand-anatomy vision check ----------------------------------------------
+// Post-generation screen: a vision model inspects a frame of a generated clip
+// for the #1 client-reported defect — impossible hands (extra/duplicated hands,
+// wrong finger counts, fused/deformed hands). `handCount` is how many distinct
+// hands are visible; `ok` is the model's overall verdict (false = regenerate).
+export const HandCheckSchema = z.object({
+  handCount: z.number(), // distinct hands visible in the frame
+  extraOrDuplicatedHands: z.boolean(),
+  deformedHands: z.boolean(), // wrong finger count, fused/melted/broken fingers
+  ok: z.boolean(), // overall: true = anatomy acceptable, false = regenerate
+  reason: z.string(), // one short phrase explaining the verdict
+});
+export type HandCheckOutput = z.infer<typeof HandCheckSchema>;

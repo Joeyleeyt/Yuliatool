@@ -125,6 +125,18 @@ export class AssetRepository extends BaseRepository<AssetRow> {
   }
 
   /**
+   * Merge keys into an asset's JSONB `metadata` (jsonb concat: right side wins,
+   * other keys preserved). Used to bump the hand-check `regen` counter without
+   * clobbering `slot`.
+   */
+  async updateMetadata(id: string, patch: Record<string, unknown>): Promise<void> {
+    await this.sql`
+      update assets
+      set metadata = coalesce(metadata, '{}'::jsonb) || ${this.sql.json(patch as never)}
+      where id = ${id}`;
+  }
+
+  /**
    * Point one asset at ANOTHER already-stored asset's R2 object (shared key, no
    * copy). Used by the download-stage fallback: when a scene's own background
    * can't be produced, its VIDEO_CLIP asset reuses a similar scene's stored clip

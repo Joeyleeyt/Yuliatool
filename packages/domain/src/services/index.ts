@@ -5,6 +5,7 @@ export * from './transcription.service.js';
 export * from './analysis.service.js';
 export * from './prompt-generation.service.js';
 export * from './scene-generation.service.js';
+export * from './hand-check.service.js';
 export * from './download-assets.service.js';
 export * from './render.service.js';
 export * from './project-read.service.js';

@@ -94,6 +94,18 @@ const EnvSchema = z.object({
   // request volume (one GET per layer per tick, for every active scene) — raise
   // it, or lower VIDEO_GENERATION_CONCURRENCY, if 429s persist.
   GENERATION_POLL_INTERVAL_SEC: z.coerce.number().int().positive().default(2),
+  // Post-generation HAND-ANATOMY CHECK: after a background clip generates, a
+  // vision model inspects a mid-clip frame for extra/deformed hands (the "three
+  // hands" defect) and, if it fails, the clip is regenerated with a fresh seed.
+  // ENABLED gates the whole feature (off = old behavior, no vision call).
+  // MAX_RETRIES bounds how many regens a single clip may trigger before the last
+  // result is accepted anyway (so a persistently-unlucky scene still completes
+  // rather than looping forever / failing the project).
+  HAND_CHECK_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  HAND_CHECK_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
   // Max concurrent per-scene OpenAI prompt-generation calls. Bounded so a
   // many-scene project doesn't burst past OpenAI rate limits. Each call is
   // ~1000-1500 tokens; OpenAI Tier 1 caps gpt-4o at 30,000 TPM, so concurrency

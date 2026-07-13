@@ -311,3 +311,27 @@ export function withRealismPreamble(scenePrompt: string): string {
 export function aspectRatioFor(renderFormat: string): string {
   return renderFormat === 'horizontal_1920x1080' ? '16:9' : '9:16';
 }
+
+// --- Hand-anatomy vision check ----------------------------------------------
+/** System prompt for the vision model that screens a generated frame for hands. */
+export function handCheckSystem(): string {
+  return (
+    `You are a strict QA reviewer for AI-generated luxury video. You inspect a single frame and ` +
+    `judge ONLY human hand/arm anatomy — the #1 defect in this footage is impossible hands ` +
+    `(a person with three or more hands, duplicated or extra hands/arms, a hand with the wrong ` +
+    `number of fingers, or fused/melted/broken fingers). Count the DISTINCT human hands visible. ` +
+    `Be conservative: if a hand is clearly malformed or there are more hands than the visible ` +
+    `people could have, mark it a failure. A frame with NO hands visible is fine (ok=true, ` +
+    `handCount=0). Do not judge anything except hands/fingers. Respond ONLY with the JSON.`
+  );
+}
+
+/** User prompt paired with the frame image for the hand check. */
+export function handCheckUser(): string {
+  return (
+    `Inspect this frame. Report: handCount (distinct human hands visible), ` +
+    `extraOrDuplicatedHands (true if more hands than the visible people plausibly have), ` +
+    `deformedHands (true if any hand has the wrong finger count or fused/melted/broken fingers), ` +
+    `ok (false if either problem is present, true otherwise), and a one-phrase reason.`
+  );
+}

@@ -21,7 +21,8 @@ import {
   type GenerationResult,
 } from '@yulia/services';
 import type { AppContext } from '../context.js';
-import { seedFrom, withRealismPreamble } from '../ai/index.js';
+import { seedFrom, withRealismPreamble, mergeNegativePrompt } from '../ai/index.js';
+import { HandCheckService } from './hand-check.service.js';
 
 const CONTENT_TYPE: Record<GenerationKind, string> = {
   video: 'video/mp4',
@@ -66,15 +67,18 @@ const RECONCILE_BUDGET_POLL_TIMEOUTS = 2;
  */
 export class SceneGenerationService {
   private readonly gens: Record<GenerationKind, GenerationService>;
+  private readonly handCheck: HandCheckService;
 
   constructor(
     private readonly ctx: AppContext,
     gens?: Partial<Record<GenerationKind, GenerationService>>,
+    handCheck?: HandCheckService,
   ) {
     this.gens = {
       video: gens?.video ?? new VideoGenerationService(),
       image: gens?.image ?? new ImageGenerationService(),
     };
+    this.handCheck = handCheck ?? new HandCheckService(ctx);
   }
 
   async run(projectId: string, sceneId: string): Promise<void> {
@@ -122,7 +126,9 @@ export class SceneGenerationService {
           sceneId,
           'video',
           slot,
-          this.backgroundRequest(projectId, sceneId, prompt, slot),
+          // Factory: `regen` (0 on first try, 1.. on hand-check retries) varies
+          // the seed so a regenerated clip actually differs from the rejected one.
+          (regen) => this.backgroundRequest(projectId, sceneId, prompt, slot, regen),
           slot * SUBMIT_STAGGER_MS,
         ),
       );
@@ -139,7 +145,9 @@ export class SceneGenerationService {
             sceneId,
             'image',
             slot,
-            this.overlayRequest(projectId, sceneId, prompt, slot),
+            // Overlays don't get the hand check (bare product, no people), so the
+            // factory ignores the regen nonce and returns the same request.
+            () => this.overlayRequest(projectId, sceneId, prompt, slot),
             // Stagger overlays AFTER the background clips so a scene's whole
             // burst of POST /generate calls spreads out (backgroundCount videos
             // first, then the images).
@@ -170,7 +178,7 @@ export class SceneGenerationService {
     sceneId: string,
     kind: GenerationKind,
     slot: number,
-    req: GenerationRequest,
+    reqFactory: (regen: number) => GenerationRequest,
     submitDelayMs: number,
   ): Promise<void> {
     const assetKind = kind === 'video' ? AssetKind.VIDEO_CLIP : AssetKind.IMAGE;
@@ -191,6 +199,11 @@ export class SceneGenerationService {
     }
     if (asset.status === 'generated' && asset.source_url) return; // awaiting download
 
+    // `regen` counts hand-check-triggered regenerations (persisted in metadata so
+    // it survives BullMQ job retries). It feeds BOTH the seed (so a regenerated
+    // clip differs) and the retry budget.
+    const regen = regenCountOf(asset);
+    const req = reqFactory(regen);
     const gen = this.gens[kind];
     let externalId = asset.external_id;
 
@@ -259,6 +272,35 @@ export class SceneGenerationService {
       throw new ExternalServiceError('69labs', 'completed without result URL', { retryable: true });
     }
 
+    // HAND-ANATOMY GATE (video/background only — overlays are bare products).
+    // Inspect a frame of the just-generated clip for extra/deformed hands; if it
+    // fails and we still have regen budget, discard it and force a fresh submit
+    // with a bumped `regen` (new seed) so the retry differs. Once the budget is
+    // exhausted we accept the last clip rather than fail the project — the render
+    // has other guards, and a wedged scene is worse than one imperfect clip.
+    if (kind === 'video' && env.HAND_CHECK_ENABLED) {
+      const verdict = await this.handCheck.check(result.resultUrl);
+      if (!verdict.ok) {
+        if (regen < env.HAND_CHECK_MAX_RETRIES) {
+          this.ctx.logger.warn(
+            { projectId, sceneId, slot, regen, verdict },
+            'hand-check REJECTED clip; regenerating with a fresh seed',
+          );
+          await this.record(projectId, sceneId, asset.id, 'hand_check', externalId, 'rejected', null, verdict.reason);
+          // Bump the persisted regen counter, then clear the generation so the
+          // next runLayer entry submits fresh. Throw retryable so BullMQ re-runs.
+          await this.ctx.repos.assets.updateMetadata(asset.id, { slot, regen: regen + 1 });
+          await this.ctx.repos.assets.clearGeneration(asset.id);
+          throw new ExternalServiceError('hand-check', `rejected: ${verdict.reason}`, { retryable: true });
+        }
+        this.ctx.logger.warn(
+          { projectId, sceneId, slot, regen, verdict },
+          'hand-check rejected but regen budget exhausted; accepting clip anyway',
+        );
+        await this.record(projectId, sceneId, asset.id, 'hand_check', externalId, 'accepted_over_budget', null, verdict.reason);
+      }
+    }
+
     await this.ctx.repos.assets.setGenerated(asset.id, result.resultUrl);
     await this.record(projectId, sceneId, asset.id, 'poll', externalId, 'completed', result.costUsd, null);
   }
@@ -276,19 +318,31 @@ export class SceneGenerationService {
     sceneId: string,
     prompt: PromptRow,
     slot: number,
+    regen = 0,
   ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
     const aspectRatio = asString(params.backgroundAspectRatio, PIP_LAYOUT.backgroundAspectRatio);
     // Each background sequence slot gets a DISTINCT seed so the back-to-back
     // clips aren't identical footage; slot 0 keeps the original seed so existing
-    // single-clip projects reconcile to the same asset. Same prompt across slots
+    // single-clip projects reconcile to the same asset. `regen` (>0 on a
+    // hand-check-triggered regeneration) further varies the seed so the retry is
+    // different footage, not the same clip re-rolled. Same prompt across slots
     // keeps every clip in one continuous world/grade within the scene.
-    const seedParts = slot === 0 ? [] : [String(slot)];
+    const seedParts = [
+      ...(slot === 0 ? [] : [String(slot)]),
+      ...(regen > 0 ? [`r${regen}`] : []),
+    ];
     return {
       // Lead every submission with the realism/physics/anatomy preamble so the
       // model obeys real-world physics before the scene description.
       prompt: withRealismPreamble(prompt.positive_prompt),
-      ...(prompt.negative_prompt ? { negativePrompt: prompt.negative_prompt } : {}),
+      // ALWAYS attach the anatomy/quality negative baseline — merged with the
+      // scene's own negative when it has one. Never gate on the row having a
+      // negative: a borrowed/legacy/model-omitted empty negative would otherwise
+      // ship a clip with NO anti-"extra hands" guard at all — the exact hole that
+      // lets the "three hands" video through. mergeNegativePrompt front-loads the
+      // hand/limb-count terms even when the scene negative is blank.
+      negativePrompt: mergeNegativePrompt(prompt.negative_prompt ?? ''),
       aspectRatio,
       seed: seedFrom(projectId, sceneId, 'video', ...seedParts),
     };
@@ -313,7 +367,12 @@ export class SceneGenerationService {
     const overlayNegative = asString(params.overlayNegativePrompt, '');
     return {
       prompt: withRealismPreamble(overlayPrompt),
-      ...(overlayNegative ? { negativePrompt: overlayNegative } : {}),
+      // Same guarantee as the background: always attach the anatomy/quality
+      // negative baseline (merged with the overlay's own when present) so a bare
+      // or missing overlayNegativePrompt can never ship without the anti-"extra
+      // hands" guard — the overlay is where a stray hand fuses with the
+      // background's hands into an impossible body.
+      negativePrompt: mergeNegativePrompt(overlayNegative),
       aspectRatio: asString(params.overlayAspectRatio, PIP_LAYOUT.overlayAspectRatio),
       // Slot in the seed so each overlay is a distinct image (slot 0 keeps the
       // original single-overlay seed for continuity with pre-rotation projects).
@@ -373,4 +432,11 @@ export class SceneGenerationService {
 
 function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback;
+}
+
+/** Read an asset's hand-check regeneration count from metadata (default 0). */
+function regenCountOf(asset: { metadata?: unknown }): number {
+  const meta = (asset.metadata ?? {}) as Record<string, unknown>;
+  const n = Number(meta.regen);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
 }

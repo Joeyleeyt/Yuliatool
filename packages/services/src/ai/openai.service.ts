@@ -12,6 +12,13 @@ export interface StructuredRequest<T> {
   temperature?: number;
   seed?: number;
   maxTokens?: number;
+  /**
+   * Optional image for a vision call (data: URL or public https URL). When set,
+   * the user message becomes multimodal (text + image) so a vision-capable model
+   * (e.g. gpt-4o) can inspect the frame — used by the hand-anatomy check that
+   * screens generated clips for extra/deformed hands.
+   */
+  imageUrl?: string;
 }
 
 export interface StructuredResult<T> {
@@ -106,7 +113,16 @@ export class OpenAIService {
           ...(req.maxTokens !== undefined ? { max_tokens: req.maxTokens } : {}),
           messages: [
             { role: 'system', content: req.system },
-            { role: 'user', content: req.user },
+            {
+              role: 'user',
+              // Multimodal when an image is supplied (vision check), plain text otherwise.
+              content: req.imageUrl
+                ? [
+                    { type: 'text', text: req.user },
+                    { type: 'image_url', image_url: { url: req.imageUrl } },
+                  ]
+                : req.user,
+            },
           ],
           response_format: zodResponseFormat(req.schema, req.schemaName),
         });
