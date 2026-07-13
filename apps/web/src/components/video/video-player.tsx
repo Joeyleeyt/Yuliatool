@@ -23,17 +23,17 @@ export function VideoPlayer({ id, title }: { id: string; title?: string }) {
   const { data, isLoading } = useRender(id);
   const { data: cost } = useCost(id);
 
-  if (isLoading) return <Skeleton className="aspect-video w-full rounded-2xl" />;
+  if (isLoading) return <Skeleton className="mx-auto aspect-video w-full max-w-3xl rounded-2xl" />;
   const render = data?.render;
   if (!render) return null;
 
   const ready = render.status === 'completed' && data?.url;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line/8 bg-surface-1 ring-hairline">
+    <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-line/8 bg-surface-1 ring-hairline">
       <div className="relative aspect-video bg-black">
         {ready ? (
-          <video src={data.url!} controls poster={undefined} className="h-full w-full" />
+          <video src={data.url!} controls poster={undefined} className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-accent/25 via-accent-2/10 to-transparent">
             <div className="absolute inset-0 bg-grain" />
