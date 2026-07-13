@@ -9,6 +9,7 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "seed:users": "node scripts/seed-users.mjs",
     "clean": "rimraf .next .turbo"
   },
   "dependencies": {

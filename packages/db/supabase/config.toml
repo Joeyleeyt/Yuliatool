@@ -21,10 +21,12 @@ port = 54323
 enabled = true
 site_url = "http://localhost:3000"
 jwt_expiry = 3600
-enable_signup = true
+# Private, invite-only tool: no public sign-up. Accounts are provisioned via
+# `pnpm --filter @yulia/web seed:users` and gated by the app's email allowlist.
+enable_signup = false
 
 [auth.email]
-enable_signup = true
+enable_signup = false
 enable_confirmations = false
 
 [storage]
