@@ -1,23 +1,34 @@
 'use client';
 
-import { Film, ImageIcon, RotateCw, PencilLine, Download, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Film, ImageIcon, Play } from 'lucide-react';
 import type { SceneView } from '@/lib/api/types';
-import { Badge, Button } from '@/components/ui/primitives';
-import { StatusDot } from '@/components/status-badge';
+import { Badge } from '@/components/ui/primitives';
+import { sceneStatusMeta } from './scene-status';
+import { cn } from '@/lib/utils';
 
-const ACTIVE = new Set(['pending', 'processing', 'submitted', 'generating', 'downloading']);
-
-/** A single scene as a Pinterest-grid tile: preview → narration → prompt → actions. */
-export function SceneCard({ scene }: { scene: SceneView }) {
+/**
+ * Compact preview tile. Shows only: number, type, thumbnail, duration, title,
+ * status. Click opens the full inspector — nothing else lives on the card.
+ */
+export function SceneCard({ scene, onOpen }: { scene: SceneView; onOpen: (s: SceneView) => void }) {
   const isVideo = scene.visual_type === 'video';
   const seconds = Math.max(0, Math.round(scene.end_sec - scene.start_sec));
-  const status = scene.assetStatus ?? 'pending';
+  const meta = sceneStatusMeta(scene.assetStatus);
+  const StatusIcon = meta.icon;
 
   return (
-    <div className="mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-line/8 bg-surface-1 shadow-soft ring-hairline transition-all duration-300 ease-premium hover:-translate-y-1 hover:shadow-lg">
-      {/* Preview */}
+    <motion.button
+      type="button"
+      onClick={() => onOpen(scene)}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      className="group flex w-full flex-col overflow-hidden rounded-[18px] border border-line/8 bg-surface-1 text-left shadow-soft ring-hairline transition-colors hover:border-line/16 hover:shadow-lg"
+    >
+      {/* Thumbnail */}
       <div className="relative aspect-video overflow-hidden">
-        <Preview scene={scene} />
+        <Thumb scene={scene} kind={meta.kind} isVideo={isVideo} />
+
         <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
           <span className="rounded-md bg-fg/55 px-1.5 py-0.5 font-mono text-[11px] font-medium text-white backdrop-blur">
             #{scene.scene_index + 1}
@@ -32,80 +43,75 @@ export function SceneCard({ scene }: { scene: SceneView }) {
         </span>
       </div>
 
-      {/* Body */}
-      <div className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 flex-1 font-medium tracking-tight text-fg">
-            {scene.title ?? `Scene ${scene.scene_index + 1}`}
-          </p>
-          <span className="flex shrink-0 items-center gap-1.5 text-[11px] capitalize text-fg-subtle">
-            <StatusDot status={status} />
-            {status}
-          </span>
-        </div>
-
-        {scene.summary && <p className="text-sm leading-relaxed text-fg-muted">{scene.summary}</p>}
-
-        {scene.narration_text && (
-          <p className="border-l-2 border-accent/25 pl-3 text-sm italic leading-relaxed text-fg-muted">
-            &ldquo;{scene.narration_text}&rdquo;
-          </p>
-        )}
-
-        {scene.prompt?.positive_prompt && (
-          <div className="rounded-xl border border-line/8 bg-surface-2/70 p-3">
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-fg-subtle">Prompt</p>
-            <p className="line-clamp-3 text-xs leading-relaxed text-fg-muted">
-              {scene.prompt.positive_prompt}
-            </p>
-          </div>
-        )}
-
-        <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
-          {scene.assetUrl && (
-            <a href={scene.assetUrl} download target="_blank" rel="noreferrer">
-              <Button size="sm" variant="outline">
-                <Download className="h-3.5 w-3.5" />
-                Download
-              </Button>
-            </a>
+      {/* Meta */}
+      <div className="flex items-center justify-between gap-3 p-4">
+        <p className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight text-fg">
+          {scene.title ?? `Scene ${scene.scene_index + 1}`}
+        </p>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium',
+            meta.tone === 'emerald' && 'text-success',
+            meta.tone === 'violet' && 'text-accent',
+            meta.tone === 'red' && 'text-danger',
+            meta.tone === 'neutral' && 'text-fg-subtle',
           )}
-          <Button size="sm" variant="ghost" disabled title="Coming soon">
-            <RotateCw className="h-3.5 w-3.5" />
-            Regenerate
-          </Button>
-          <Button size="sm" variant="ghost" disabled title="Coming soon">
-            <PencilLine className="h-3.5 w-3.5" />
-            Edit prompt
-          </Button>
-        </div>
+        >
+          <StatusIcon className={cn('h-3 w-3', meta.kind === 'active' && 'animate-spin')} />
+          {meta.label}
+        </span>
       </div>
-    </div>
+    </motion.button>
   );
 }
 
-function Preview({ scene }: { scene: SceneView }) {
-  const status = scene.assetStatus ?? 'pending';
-
-  if (!scene.assetUrl) {
-    const active = ACTIVE.has(status);
-    const Icon = active ? Loader2 : scene.visual_type === 'video' ? Film : ImageIcon;
+function Thumb({
+  scene,
+  kind,
+  isVideo,
+}: {
+  scene: SceneView;
+  kind: ReturnType<typeof sceneStatusMeta>['kind'];
+  isVideo: boolean;
+}) {
+  // Ready asset → show the real media (fades in).
+  if (scene.assetUrl) {
     return (
-      <div className="relative flex h-full min-h-44 flex-col items-center justify-center gap-2.5 bg-gradient-to-br from-surface-2 to-surface-3">
-        <div className="pointer-events-none absolute inset-0 bg-grain" />
-        <Icon
-          className={`relative h-6 w-6 ${active ? 'animate-spin text-accent' : 'text-fg-subtle'}`}
-        />
-        <span className="relative text-[11px] uppercase tracking-wide text-fg-subtle capitalize">
-          {status}
-        </span>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="h-full w-full"
+      >
+        {isVideo ? (
+          <>
+            <video src={scene.assetUrl} muted playsInline className="h-full w-full bg-black object-cover" />
+            <div className="absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-black/40 backdrop-blur">
+                <Play className="h-4 w-4 translate-x-0.5 text-white" />
+              </span>
+            </div>
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={scene.assetUrl} alt={scene.title ?? 'scene'} className="h-full w-full object-cover" />
+        )}
+      </motion.div>
     );
   }
-  return scene.visual_type === 'video' ? (
-    <video src={scene.assetUrl} controls className="h-full w-full bg-black object-cover" />
-  ) : (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={scene.assetUrl} alt={scene.title ?? 'scene'} className="h-full w-full object-cover" />
+
+  // Generating → shimmering skeleton. Pending → calm placeholder.
+  const generating = kind === 'active';
+  const Icon = isVideo ? Film : ImageIcon;
+  return (
+    <div
+      className={cn(
+        'relative flex h-full w-full items-center justify-center bg-gradient-to-br from-surface-2 to-surface-3',
+        generating && 'animate-shimmer bg-[length:200%_100%] from-surface-2 via-surface-3 to-surface-2',
+      )}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-grain" />
+      <Icon className={cn('relative h-6 w-6', generating ? 'text-accent/60' : 'text-fg-subtle/60')} />
+    </div>
   );
 }

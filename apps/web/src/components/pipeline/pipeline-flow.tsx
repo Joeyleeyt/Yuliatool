@@ -1,26 +1,41 @@
 'use client';
 
-import { RotateCw, AlertCircle } from 'lucide-react';
+import { ChevronRight, RotateCw, AlertCircle } from 'lucide-react';
 import { useProjectStatus, useRetryProject } from '@/lib/query/hooks';
 import { PIPELINE_STAGES, stageIndexForStatus } from './stages';
-import { PipelineNode, type NodeState } from './pipeline-node';
+import type { NodeState } from './pipeline-node';
+import { StageCard } from './stage-card';
 import { ProgressIndicator } from './progress-indicator';
 import { GenerationTimer } from './generation-timer';
 import { Badge, Button } from '@/components/ui/primitives';
 import { PROJECT_STATUS_META } from '@yulia/core/enums';
 
+/** Rough time-remaining from elapsed vs overall progress. Estimate only. */
+function etaLabel(startedAt: string, progress: number): string | undefined {
+  if (progress <= 2 || progress >= 99) return undefined;
+  const startMs = Date.parse(startedAt);
+  if (Number.isNaN(startMs)) return undefined;
+  const elapsed = (Date.now() - startMs) / 1000;
+  const remaining = (elapsed * (100 - progress)) / progress;
+  if (!Number.isFinite(remaining) || remaining <= 0) return undefined;
+  const m = Math.round(remaining / 60);
+  if (m >= 60) return `ETA ~${Math.floor(m / 60)}h ${m % 60}m`;
+  if (m >= 1) return `ETA ~${m}m left`;
+  return `ETA ~${Math.round(remaining)}s left`;
+}
+
 export function PipelineFlow({ id }: { id: string }) {
   const { data } = useProjectStatus(id);
   const retry = useRetryProject(id);
 
-  const running = data ? !['completed', 'failed', 'created'].includes(data.status) : false;
-
   if (!data) return null;
 
+  const running = !['completed', 'failed', 'created'].includes(data.status);
   const failed = data.status === 'failed';
   const completed = data.status === 'completed';
   const cs = stageIndexForStatus(data.status);
   const meta = PROJECT_STATUS_META[data.status as keyof typeof PROJECT_STATUS_META];
+  const eta = running ? etaLabel(data.startedAt, data.progress) : undefined;
 
   const nodeState = (i: number): NodeState => {
     if (completed) return 'done';
@@ -30,13 +45,43 @@ export function PipelineFlow({ id }: { id: string }) {
     return 'pending';
   };
 
-  const activeDetail = (i: number): string | undefined => {
-    if (nodeState(i) !== 'active') return undefined;
+  // Live percentage for the active stage where we have real signal; else null (indeterminate).
+  const stagePct = (i: number): number | null => {
+    const st = nodeState(i);
+    if (st === 'done') return 100;
+    if (st === 'pending' || st === 'error') return st === 'error' ? 0 : 0;
     const key = PIPELINE_STAGES[i]!.key;
-    if (key === 'planning') return data.totalScenes > 0 ? `${data.totalScenes} scenes planned` : 'Segmenting the story…';
-    if (key === 'video' || key === 'image')
-      return `Generating · ${data.completedScenes}/${data.totalScenes} scenes ready`;
-    return undefined;
+    if ((key === 'video' || key === 'image') && data.totalScenes > 0) {
+      return Math.min(100, (data.completedScenes / data.totalScenes) * 100);
+    }
+    return null; // transcript / analysis / planning / render: unknown granularity
+  };
+
+  const stageMetric = (i: number): string | undefined => {
+    const st = nodeState(i);
+    const key = PIPELINE_STAGES[i]!.key;
+    if (st === 'done') return 'Complete';
+    if (st === 'pending') return 'Waiting';
+    if (st === 'error') return 'Failed';
+    // active
+    switch (key) {
+      case 'audio':
+        return 'Narration uploaded';
+      case 'transcript':
+        return 'Transcribing…';
+      case 'analysis':
+        return 'Reading the story…';
+      case 'planning':
+        return data.totalScenes > 0 ? `${data.totalScenes} scenes planned` : 'Segmenting…';
+      case 'video':
+        return `${data.completedScenes} / ${data.totalScenes} clips`;
+      case 'image':
+        return `${data.completedScenes} / ${data.totalScenes} stills`;
+      case 'render':
+        return 'Encoding & muxing…';
+      default:
+        return undefined;
+    }
   };
 
   return (
@@ -44,8 +89,9 @@ export function PipelineFlow({ id }: { id: string }) {
       {running && (
         <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-editorial-glow opacity-70" />
       )}
+
       {/* Header */}
-      <div className="mb-6 flex items-center gap-5">
+      <div className="relative mb-6 flex items-center gap-5">
         <ProgressIndicator
           value={completed ? 100 : data.progress}
           tone={failed ? 'danger' : completed ? 'success' : 'accent'}
@@ -70,25 +116,27 @@ export function PipelineFlow({ id }: { id: string }) {
             {meta?.label ?? data.status}
             {data.totalScenes > 0 && ` · ${data.completedScenes}/${data.totalScenes} scenes ready`}
           </p>
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-3">
             <GenerationTimer
               startedAt={data.startedAt}
               completedAt={data.completedAt}
               durationSec={data.durationSec}
               running={running}
             />
+            {eta && <span className="font-mono text-xs text-fg-subtle">· {eta}</span>}
           </div>
         </div>
       </div>
 
       {/* Failure banner */}
       {failed && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-danger/25 bg-danger/8 p-4">
+        <div className="relative mb-6 flex items-start gap-3 rounded-xl border border-danger/25 bg-danger/8 p-4">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <div className="flex-1">
             <p className="text-sm font-medium text-danger">Something interrupted the pipeline</p>
             <p className="mt-0.5 text-xs text-fg-muted">
-              {data.errorMessage ?? 'A stage failed. Retry resumes from the last safe checkpoint — no double charges.'}
+              {data.errorMessage ??
+                'A stage failed. Retry resumes from the last safe checkpoint — no double charges.'}
             </p>
           </div>
           <Button size="sm" onClick={() => retry.mutate()} disabled={retry.isPending}>
@@ -98,16 +146,21 @@ export function PipelineFlow({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Nodes */}
-      <div>
+      {/* Horizontal stage timeline */}
+      <div className="relative flex items-stretch gap-2 overflow-x-auto pb-1">
         {PIPELINE_STAGES.map((stage, i) => (
-          <PipelineNode
-            key={stage.key}
-            stage={stage}
-            state={nodeState(i)}
-            isLast={i === PIPELINE_STAGES.length - 1}
-            detail={activeDetail(i)}
-          />
+          <div key={stage.key} className="flex items-center gap-2">
+            <StageCard
+              stage={stage}
+              state={nodeState(i)}
+              pct={stagePct(i)}
+              metric={stageMetric(i)}
+              eta={nodeState(i) === 'active' ? eta : undefined}
+            />
+            {i < PIPELINE_STAGES.length - 1 && (
+              <ChevronRight className="h-4 w-4 shrink-0 text-fg-subtle/50" />
+            )}
+          </div>
         ))}
       </div>
     </div>
