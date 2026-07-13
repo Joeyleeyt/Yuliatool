@@ -1,19 +1,12 @@
-import { dirname } from 'node:path';
 import {
   RENDER_ENCODING,
   TRANSITION,
-  PIP_LAYOUT,
-  TITLE_CARD,
   COLOR_GRADE,
   BACKGROUND_CLIP,
   OverlayMotion,
-  OverlayPosition,
-  OverlayTransition,
 } from '@yulia/core';
 import { INTERMEDIATE_ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
 import { probe } from './ffprobe.js';
-import { titleCardFont } from './fonts.js';
-import { getPipMasks } from './pip-masks.js';
 
 export interface NormalizeOpts {
   width: number;
@@ -74,20 +67,9 @@ function motionZoompanExpr(motion: OverlayMotion, frames: number): string {
   }
 }
 
-/** Optional title-card overlay: number + title burned lower-left. */
-export interface TitleCardOpts {
-  itemNumber: number;
-  titleText: string;
-}
-
-/** Round to the nearest even integer (libx264 needs even plane dimensions). */
-function even(n: number): number {
-  return 2 * Math.round(n / 2);
-}
-
 /**
  * Warm "quiet luxury" grade (eq for tone + curves for champagne/ivory warmth),
- * applied to the background layer. Shared by the PiP and full-frame paths.
+ * applied to every scene so video and image scenes read as one graded world.
  */
 function gradeFilter(): string {
   return (
@@ -252,29 +234,24 @@ async function buildSceneBackground(
 }
 
 /**
- * Full-frame composite for a video-only "breather" scene: cover-crop the
- * background to the whole canvas, slow-to-fill, grade, and (optionally) burn the
- * numbered title card. No overlay window, no shadow.
+ * Full-frame VIDEO scene: assemble the scene's clips (crossfade-chained), fill
+ * the scene from them — gently slowing when nearly long enough, or seamlessly
+ * boomerang-LOOPING when short (no frozen tail; see buildBackgroundFill) — and
+ * grade. Cover-cropped to the whole canvas; no overlay, no shadow.
  */
-async function compositeFullFrame(
+export async function compositeFullFrameVideo(
   backgroundPaths: string[],
   output: string,
   o: NormalizeOpts,
-  title?: TitleCardOpts,
 ): Promise<void> {
   const { width: W, height: H, fps } = o;
   const d = o.durationSec.toFixed(3);
   const pix = RENDER_ENCODING.pixelFormat;
-  // Assemble the scene's clips (native speed, crossfade-chained) into one
-  // background, then fill the scene from it — gently slowing when it's nearly
-  // long enough, or seamlessly boomerang-LOOPING when it's short (no frozen
-  // tail; see buildBackgroundFill).
   const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
   const srcDur = await backgroundSrcDuration(backgroundPath, o.durationSec);
-  const titleChain = title ? buildTitleCardChain(W, H, title) : '';
 
   const fill = buildBackgroundFill(srcDur, W, H, fps, o.durationSec, 'bgfill');
-  const graph = `${fill};[bgfill]${gradeFilter()},setsar=1${titleChain},format=${pix}[out]`;
+  const graph = `${fill};[bgfill]${gradeFilter()},setsar=1,format=${pix}[out]`;
 
   await runFfmpeg([
     '-i',
@@ -292,264 +269,29 @@ async function compositeFullFrame(
 }
 
 /**
- * Escape a string for use as an ffmpeg `drawtext` `text=` value inside a
- * filtergraph. Backslash first, then the filtergraph/drawtext metacharacters.
+ * Full-frame IMAGE scene: render the single still full-screen with a slow Ken
+ * Burns move (via normalizeImageSegment), then apply the same warm grade as the
+ * video scenes so images and videos read as one graded world.
  */
-function escapeDrawtext(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'")
-    .replace(/%/g, '\\%');
-}
-
-/**
- * Build the fade-in → hold → fade-out alpha envelope for a `drawtext` overlay.
- * `drawtext` has no native fade, so the standard idiom is an `alpha` expression.
- */
-function drawtextAlphaEnvelope(appear: number, hold: number, fade: number): string {
-  const end = appear + hold;
-  return (
-    `'if(lt(t,${appear.toFixed(3)}),0,` +
-    `if(lt(t,${(appear + fade).toFixed(3)}),(t-${appear.toFixed(3)})/${fade.toFixed(3)},` +
-    `if(lt(t,${(end - fade).toFixed(3)}),1,` +
-    `if(lt(t,${end.toFixed(3)}),(${end.toFixed(3)}-t)/${fade.toFixed(3)},0))))'`
-  );
-}
-
-/**
- * Composite one scene of the picture-in-picture format: a wide background video
- * with a portrait overlay "window" floated over it — scaled to the layout box,
- * rounded corners, a soft drop shadow, and a fade-in — at the scene's side.
- *
- * Output is a canonical WxH clip of exactly `durationSec` (background is
- * cover-cropped and clone-padded/trimmed to length), ready to feed the crossfade
- * chain just like a plain normalized segment.
- */
-export async function compositeScene(
-  backgroundPaths: string[],
-  overlayPaths: string[],
-  position: OverlayPosition,
+export async function compositeFullFrameImage(
+  imagePath: string,
   output: string,
   o: NormalizeOpts,
-  title?: TitleCardOpts,
-  motions?: OverlayMotion[],
-  transition: OverlayTransition = OverlayTransition.CROSSFADE,
 ): Promise<void> {
-  const { width: W, height: H, fps } = o;
-
-  // Full-frame, video-only "breather" scene: no overlay window. Composite the
-  // graded background at full canvas (plus the optional title card) and return.
-  if (overlayPaths.length === 0) {
-    await compositeFullFrame(backgroundPaths, output, o, title);
-    return;
-  }
-
-  // Assemble the scene's background clips (native speed, crossfade-chained) into
-  // one clip; the PiP chain below consumes it exactly as it did a single source.
-  const backgroundPath = await buildSceneBackground(backgroundPaths, output, o);
-
-  // Resolve the overlay window's box from the editing plan's position. `center`
-  // is a near-full-frame window (it replaces the background); left/right are the
-  // narrower gutter windows that keep the focal subject visible on the far side.
-  const isCenter = position === OverlayPosition.CENTER;
-  const ow = even(
-    Math.round(W * (isCenter ? PIP_LAYOUT.centerWidthFrac : PIP_LAYOUT.overlayWidthFrac)),
-  );
-  const oh = even(
-    Math.round(H * (isCenter ? PIP_LAYOUT.centerHeightFrac : PIP_LAYOUT.overlayHeightFrac)),
-  );
-  const x = isCenter
-    ? Math.round((W - ow) / 2)
-    : Math.round(W * (position === OverlayPosition.LEFT ? PIP_LAYOUT.leftXFrac : PIP_LAYOUT.rightXFrac));
-  // Raise the window above dead-center so the lower-left title card has room.
-  const y = Math.round((H - oh) / 2 - H * PIP_LAYOUT.verticalBiasFrac);
-  const off = PIP_LAYOUT.shadowOffsetPx;
-  const d = o.durationSec.toFixed(3);
   const pix = RENDER_ENCODING.pixelFormat;
-
-  // Window mask + shadow are identical for every scene at this window size (the
-  // canvas size doesn't change mid-render) — generated once per render and
-  // reused here instead of recomputing the shape with `geq` every frame.
-  const { windowMaskPath, shadowPath } = await getPipMasks(dirname(output), ow, oh);
-
-  // The overlay window PUNCTUATES the background: it enters a beat after the
-  // scene starts and exits before it ends. Its visible span is then divided
-  // EQUALLY among the overlay images, so the window rotates from one image to
-  // the next mid-scene (each on screen ~5–8s for a 10–15s scene).
-  const ovStart = PIP_LAYOUT.overlayStartOffsetSec;
-  const ovEndRaw = o.durationSec - PIP_LAYOUT.overlayEndOffsetSec;
-  const ovEnd = Math.max(ovStart + PIP_LAYOUT.minOverlayVisibleSec, ovEndRaw);
-  const n = overlayPaths.length;
-  const sliceLen = (ovEnd - ovStart) / n;
-
-  // Pre-render each overlay to a motion clip at window size (reuses the proven
-  // still-motion path) so each rotated image animates per the editing plan's
-  // chosen motion rather than sitting static. `motions[i]` aligns to the overlay
-  // by rotation index; a missing entry falls back to the default slow zoom-in.
-  const overlayClips = await Promise.all(
-    overlayPaths.map(async (p, i) => {
-      const clip = `${output}.overlay${i}.mp4`;
-      await normalizeImageSegment(
-        p,
-        clip,
-        { width: ow, height: oh, fps, durationSec: o.durationSec },
-        motions?.[i] ?? OverlayMotion.SLOW_ZOOM_IN,
-      );
-      return clip;
-    }),
-  );
-
-  // Fit the background to the scene: gentle slow when it's nearly long enough,
-  // else a seamless boomerang loop (no frozen tail — see buildBackgroundFill).
-  const srcDur = await backgroundSrcDuration(backgroundPath, o.durationSec);
-
-  // Warm "quiet luxury" grade on the BACKGROUND only.
-  const grade = gradeFilter();
-  const titleChain = title ? buildTitleCardChain(W, H, title) : '';
-
-  // Input indices: 0 = background, 1 = shadow PNG (looped, shared by every
-  // overlay slice), 2 = window mask PNG (looped), 3..3+n-1 = overlay clips.
-  const shadowIdx = 1;
-  const maskIdx = 2;
-  const overlayInputBase = 3;
-
-  const parts: string[] = [
-    // Background fill (slow-or-loop) -> grade -> [bg]. buildBackgroundFill emits
-    // `[0:v]…[bgfill]`; graft the grade onto that label to produce [bg].
-    `${buildBackgroundFill(srcDur, W, H, fps, o.durationSec, 'bgfill')};` +
-      `[bgfill]${grade},setsar=1[bg]`,
-  ];
-
-  // Each overlay: merge the pre-baked rounded-rect mask onto its alpha channel
-  // (replaces per-frame `geq`), fade in/out at its slice, then composite (with
-  // the shared pre-baked shadow) gated to that slice so exactly one image is
-  // visible at a time and they hand off with a soft cross-fade. The mask/shadow
-  // source pads are re-read (not `split`) per slice — cheap, since each is a
-  // single still image, not a video decode.
-  let prev = 'bg';
-  for (let i = 0; i < n; i++) {
-    const sStart = ovStart + i * sliceLen;
-    const sEnd = i === n - 1 ? ovEnd : sStart + sliceLen;
-    const fadeOutAt = Math.max(sStart, sEnd - PIP_LAYOUT.fadeOutSec).toFixed(3);
-    const gate = `enable='between(t,${sStart.toFixed(3)},${sEnd.toFixed(3)})'`;
-    const inIdx = overlayInputBase + i;
-
-    // The window's ENTRANCE transition (from the editing plan) applies only to
-    // the FIRST overlay slot — that's when the window enters the scene. Later
-    // slots are the in-scene rotation hand-off and always soft-crossfade.
-    //   crossfade/fade -> alpha fade up (the default)
-    //   hard_cut       -> no entrance fade (the enable gate pops it in)
-    //   fade_to_white  -> RGB fades up FROM white (a brief white wash), plus the
-    //                     alpha fade so the rounded window edge still eases in
-    const entrance = i === 0 ? transition : OverlayTransition.CROSSFADE;
-    const fin = PIP_LAYOUT.fadeInSec;
-    const whiteWash =
-      entrance === OverlayTransition.FADE_TO_WHITE
-        ? `fade=t=in:st=${sStart.toFixed(3)}:d=${fin}:color=white,`
-        : '';
-    const alphaFadeIn =
-      entrance === OverlayTransition.HARD_CUT
-        ? ''
-        : `fade=t=in:st=${sStart.toFixed(3)}:d=${fin}:alpha=1,`;
-
-    parts.push(
-      `[${shadowIdx}:v]format=rgba[shadowsrc${i}]`,
-      `[${maskIdx}:v]format=gray[mask${i}]`,
-      // White-wash (if any) is applied to the RGB before alphamerge so it tints
-      // the image itself; the alpha fades handle the rounded window edge.
-      `[${inIdx}:v]${whiteWash}format=rgba[ovlrgb${i}]`,
-      `[ovlrgb${i}][mask${i}]alphamerge,` +
-        `${alphaFadeIn}` +
-        `fade=t=out:st=${fadeOutAt}:d=${PIP_LAYOUT.fadeOutSec}:alpha=1,setsar=1[ovl${i}]`,
-      `[${prev}][shadowsrc${i}]overlay=x=${x + off}:y=${y + off}:${gate}[bgs${i}]`,
-      // The last composite also gets the title-card chain + output format/label.
-      i === n - 1
-        ? `[bgs${i}][ovl${i}]overlay=x=${x}:y=${y}:${gate}${titleChain},format=${pix}[out]`
-        : `[bgs${i}][ovl${i}]overlay=x=${x}:y=${y}:${gate}[comp${i}]`,
-    );
-    prev = `comp${i}`;
-  }
-
+  // Ken Burns the still to a full-frame clip of the target length...
+  const kenBurns = `${output}.kb.mp4`;
+  await normalizeImageSegment(imagePath, kenBurns, o);
+  // ...then grade it to match the video scenes' look.
   await runFfmpeg([
     '-i',
-    backgroundPath,
-    '-loop',
-    '1',
-    '-i',
-    shadowPath,
-    '-loop',
-    '1',
-    '-i',
-    windowMaskPath,
-    ...overlayClips.flatMap((c) => ['-i', c]),
-    '-filter_complex',
-    parts.join(';'),
-    '-map',
-    '[out]',
-    '-t',
-    d,
+    kenBurns,
+    '-vf',
+    `${gradeFilter()},setsar=1,format=${pix}`,
     '-an',
     ...INTERMEDIATE_ENCODE_ARGS,
     output,
   ]);
-}
-
-/**
- * Build the trailing `,drawtext=...,drawtext=...` chain for the numbered title
- * card (number above title, both faded in/out) to append after the PiP overlay.
- * Returns '' when no title is supplied — or when no usable font exists, in which
- * case we skip the card rather than hand ffmpeg a missing fontfile (which aborts
- * the whole render).
- */
-function buildTitleCardChain(W: number, H: number, title: TitleCardOpts): string {
-  const font = titleCardFont();
-  if (!font) return '';
-  const x = Math.round(W * TITLE_CARD.xFrac);
-  const numberY = Math.round(H * TITLE_CARD.numberYFrac);
-  const titleY = Math.round(H * TITLE_CARD.titleYFrac);
-  const numberSize = Math.round(H * TITLE_CARD.numberSizeFrac);
-  const titleSize = Math.round(H * TITLE_CARD.titleSizeFrac);
-  const alpha = drawtextAlphaEnvelope(
-    TITLE_CARD.appearOffsetSec,
-    TITLE_CARD.holdSec,
-    TITLE_CARD.fadeSec,
-  );
-  const numberText = escapeDrawtext(`#${title.itemNumber}`);
-  const titleText = escapeDrawtext(title.titleText.toUpperCase());
-
-  const common =
-    `fontcolor=${TITLE_CARD.color}:borderw=${TITLE_CARD.borderWidthPx}:` +
-    `bordercolor=${TITLE_CARD.borderColor}:alpha=${alpha}`;
-
-  return (
-    `,drawtext=fontfile='${font}':text='${numberText}':x=${x}:y=${numberY}:` +
-    `fontsize=${numberSize}:${common}` +
-    `,drawtext=fontfile='${font}':text='${titleText}':x=${x}:y=${titleY}:` +
-    `fontsize=${titleSize}:${common}`
-  );
-}
-
-/**
- * Normalize a generated video clip to the canonical encoding at exactly
- * `durationSec`: cover-scale + center-crop to target dims, fix fps/sar/pixfmt,
- * and clone the final frame (tpad) if the source is shorter than needed.
- */
-export async function normalizeVideoSegment(
-  input: string,
-  output: string,
-  o: NormalizeOpts,
-): Promise<void> {
-  const vf = [
-    `scale=${o.width}:${o.height}:force_original_aspect_ratio=increase`,
-    `crop=${o.width}:${o.height}`,
-    `fps=${o.fps}`,
-    `tpad=stop_mode=clone:stop_duration=${o.durationSec.toFixed(3)}`,
-    'setsar=1',
-    `format=${RENDER_ENCODING.pixelFormat}`,
-  ].join(',');
-
-  await runFfmpeg(['-i', input, '-t', o.durationSec.toFixed(3), '-an', '-vf', vf, ...INTERMEDIATE_ENCODE_ARGS, output]);
 }
 
 /**

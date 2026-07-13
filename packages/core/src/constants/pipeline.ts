@@ -69,58 +69,74 @@ export function overlayCountForDuration(sceneDurationSec: number): number {
  */
 export const BACKGROUND_CLIP = {
   nativeClipSec: 8, // 69Labs default clip length (no duration control)
-  maxPerScene: 4, // cost/rate-limit ceiling; 4×8s covers the 25s max scene
+  maxPerScene: 4, // normal ceiling for a within-cadence scene (4×8s covers 25s)
   crossfadeSec: 0.4, // short dissolve where consecutive sub-clips meet
+  // A scene's ON-SCREEN span can exceed its narration length when a long WORDLESS
+  // gap follows it (e.g. a music-only stretch): the scene is held until the next
+  // scene starts. Filling that whole span by LOOPING one short assembly read as
+  // "a video looped for 2 min" (client feedback). Instead we generate enough
+  // DISTINCT clips to cover the display span with fresh footage — bounded by this
+  // higher ceiling so a pathological gap can't request unlimited generations.
+  maxPerLongScene: 16, // 16×8s ≈ 2 min of distinct footage before we must loop
 } as const;
 
-export function backgroundClipCountForDuration(sceneDurationSec: number): number {
-  const n = Math.ceil(sceneDurationSec / BACKGROUND_CLIP.nativeClipSec);
-  return Math.max(1, Math.min(BACKGROUND_CLIP.maxPerScene, n));
+/**
+ * Background clips for a scene displayed for `displaySec`. Normally this is the
+ * scene's narration length (→ ≤ maxPerScene). For a scene held across a long
+ * wordless gap, `displaySec` is the full on-screen span, so more distinct clips
+ * are generated to cover it (→ up to maxPerLongScene) instead of looping one.
+ */
+export function backgroundClipCountForDuration(displaySec: number): number {
+  const n = Math.ceil(displaySec / BACKGROUND_CLIP.nativeClipSec);
+  return Math.max(1, Math.min(BACKGROUND_CLIP.maxPerLongScene, n));
 }
 
 // How often the generation stage polls 69Labs for a result now lives in `env`
 // (GENERATION_POLL_INTERVAL_SEC) so it's tunable per-deploy without a rebuild.
 
 /**
- * Overlay treatment per scene. This drives BOTH generation and render:
- *   - VIDEO  = a full-frame, video-only "breather" beat. No overlay window is
- *              generated or composited; the background is a shared recurring
- *              "interstitial" clip (see `interstitialSeedKey`).
- *   - IMAGE  = a "product" beat: a unique background video + a portrait overlay
- *              window floated over it (the picture-in-picture format).
+ * Visual treatment per scene. Videos and images are now SEPARATE full-frame
+ * scenes (client direction) — the old picture-in-picture composite (a video
+ * background with a product-image window floated over it) is retired:
+ *   - VIDEO  = a full-frame video scene (69Labs video clip[s], full canvas).
+ *   - IMAGE  = a full-frame IMAGE scene (one 69Labs image, filling the screen,
+ *              rendered with a slow Ken Burns move). No video clip, no overlay.
  *
- * The rule (deterministic, decided once at segmentation so generation + render
- * always agree): the FIRST and LAST scene are always full-frame video, and any
- * middle scene whose narration has "no special thing to show" (no concrete
- * product/detail — see `narrationHasProductBeat`) is also full-frame. Every
- * other scene is a product/overlay beat.
+ * Mix target ~70% video / 30% image: roughly every third scene is an image, the
+ * rest video. First/last are always video (stronger opening/closing motion).
+ * Deterministic by index so generation + render always agree. Fewer videos is
+ * also the point — it cuts the 69Labs asset count (generation time).
  */
 export function overlayTreatmentForScene(
   index: number,
   total: number,
-  narration: string,
+  _narration: string,
 ): SceneVisualType {
   const isFirst = index === 0;
   const isLast = index === total - 1;
   if (isFirst || isLast) return SceneVisualType.VIDEO;
-  // Sprinkle in extra full-frame (no-overlay) breather scenes so the edit isn't
-  // wall-to-wall PiP windows (client feedback: "include videos without images").
-  // Every Nth middle scene is video-only regardless of narration; overlay/PiP
-  // scenes still stay the majority.
-  if (index % VIDEO_ONLY_EVERY_NTH_SCENE === 0) return SceneVisualType.VIDEO;
-  return narrationHasProductBeat(narration) ? SceneVisualType.IMAGE : SceneVisualType.VIDEO;
+  // ~30% images: every IMAGE_EVERY_NTH_SCENE-th middle scene is a full-frame
+  // image, the rest are full-frame video (~70%).
+  return index % IMAGE_EVERY_NTH_SCENE === 0 ? SceneVisualType.IMAGE : SceneVisualType.VIDEO;
 }
 
 /**
- * Force a full-frame, video-only "breather" scene every Nth middle scene, on top
- * of the first/last and the narration heuristic, so the finished video mixes in
- * more shots without an overlay window. Higher N = fewer forced breathers (keeps
- * overlay/PiP scenes the majority).
+ * Cadence of full-frame IMAGE scenes among the middle scenes. 1-in-3 ≈ 30%
+ * images / 70% video, the client's requested split. Higher = fewer images.
  */
-const VIDEO_ONLY_EVERY_NTH_SCENE = 4;
+const IMAGE_EVERY_NTH_SCENE = 3;
 
-/** A scene shows an overlay window iff it's a product/IMAGE beat. */
+/**
+ * Whether a scene is a full-frame IMAGE scene (vs a full-frame VIDEO scene).
+ * Retains the old name so existing call sites read naturally; there is no longer
+ * an overlay "window" — an IMAGE scene IS the image, full-screen.
+ */
 export function sceneHasOverlay(visualType: SceneVisualType): boolean {
+  return visualType === SceneVisualType.IMAGE;
+}
+
+/** True when the scene's single visual is a full-frame image (no video clip). */
+export function sceneIsFullFrameImage(visualType: SceneVisualType): boolean {
   return visualType === SceneVisualType.IMAGE;
 }
 

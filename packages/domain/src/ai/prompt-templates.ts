@@ -171,34 +171,25 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `full-body locomotion — the model renders that as clipping through furniture and floating feet. ` +
     `Avoid fabric or objects that float, morph, or move in physically impossible ways; any fabric ` +
     `motion is a light, natural settle.\n` +
-    `2) OVERLAY — a 4:5 portrait still IMAGE that is a CLEAN, ISOLATED PRODUCT SHOT: the single ` +
-    `hero object by itself on a simple luxury surface (silk, marble, velvet, linen) with negative ` +
-    `space, editorial studio lighting. By default show NO hands and NO person in the overlay — a ` +
-    `bare product. This is deliberate: the overlay window is floated OVER a background that often ` +
-    `already shows the woman's hands, so if the overlay ALSO shows hands the two fuse at the ` +
-    `window edge into an impossible body ("three hands"). A hands-free product overlay over a ` +
-    `person background cannot fuse that way. Only include a hand in the overlay if the beat truly ` +
-    `requires it (e.g. fastening a clasp) — and then pin "exactly one hand, five fingers, ` +
-    `anatomically correct" and keep it a single hand. Provide a primary overlay and a second, ` +
-    `DIFFERENT clean product angle/detail (the window rotates between them on longer scenes).\n\n` +
-    `Every overlay prompt MUST read like a brief for a high-end beauty/lifestyle campaign and ` +
-    `specify: subject, environment, lighting, camera angle, lens (e.g. 85mm), composition, ` +
-    `materials & textures, color palette, mood, and depth of field. Never write a vague prompt ` +
-    `like "perfume bottle" — write "elegant crystal perfume bottle standing alone on white silk ` +
-    `beside a folded ribbon, no hands, soft studio light, shallow depth of field, champagne ` +
-    `palette, 85mm".\n\n` +
-    `Then choose the overlay's EDITING PLAN:\n` +
-    `- overlayPosition (left | center | right): assume the background usually holds the focal ` +
-    `subject near center — pick the side that keeps that subject visible. Use CENTER only when the ` +
-    `overlay is meant to REPLACE the background (full lifestyle / mood / architecture / nature ` +
-    `moment). Do NOT alternate left/right mechanically; choose by composition.\n` +
-    `- overlayMotion / overlayMotion2 (static | slow_zoom_in | slow_zoom_out | pan_left | ` +
-    `pan_right | drift_up | drift_down): pick the motion that best matches the beat (slow_zoom_in ` +
-    `for reveals, pan for landscapes, static for crisp product detail).\n` +
-    `- overlayTransition (crossfade | fade | hard_cut | fade_to_white): crossfade for most scenes; ` +
-    `hard_cut only for fast product comparisons/lists; fade_to_white only entering a new chapter.\n\n` +
-    `The layers must never contradict each other. Produce extremely cinematic, richly detailed ` +
-    `prompts. Respond ONLY with the structured JSON.`
+    `2) IMAGE (the overlayPrompt field) — a FULL-FRAME, wide 16:9 still IMAGE that FILLS THE WHOLE ` +
+    `SCREEN, used as its own standalone scene (NOT a small window floated over video). It is a ` +
+    `clean, editorial luxury-lifestyle still in the SAME world, wardrobe, and warm grade as the ` +
+    `video scenes: a composed full-frame moment — a product/detail on a beautiful surface, a serene ` +
+    `interior, a tablescape, flowers, a textural close-up. Compose it edge-to-edge for a 16:9 frame ` +
+    `(NOT a centered object marooned in negative space). If a person appears, pin the anatomy count ` +
+    `(exactly one woman, two hands, five fingers each, anatomically correct); prefer no hands unless ` +
+    `the beat needs them. Provide a primary image and a SECOND, DIFFERENT full-frame composition of ` +
+    `the same beat (overlayPrompt2) as an alternate — or null if one is enough.\n\n` +
+    `Every image prompt MUST read like a brief for a high-end lifestyle campaign and specify: ` +
+    `subject, environment, lighting, camera angle, lens (e.g. 35mm/50mm for a wide full-frame look), ` +
+    `composition, materials & textures, color palette, mood, and depth of field. Never write a vague ` +
+    `prompt like "perfume bottle" — write a full-frame scene: "an elegant crystal perfume bottle on ` +
+    `a marble vanity beside white peonies and folded silk, soft morning window light filling the ` +
+    `frame, shallow depth of field, champagne-and-ivory palette, 35mm".\n\n` +
+    `Ignore any left/right/center placement or window motion — images are now full-screen scenes, ` +
+    `so no overlay editing plan is needed; leave overlayPosition / overlayMotion / overlayTransition ` +
+    `null.\n\n` +
+    `Produce extremely cinematic, richly detailed prompts. Respond ONLY with the structured JSON.`
   );
 }
 

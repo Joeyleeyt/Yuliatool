@@ -3,15 +3,14 @@ import {
   ProjectStatus,
   QueueName,
   PIP_LAYOUT,
-  sceneHasOverlay,
-  overlayCountForDuration,
+  sceneIsFullFrameImage,
   backgroundClipCountForDuration,
   NotFoundError,
   ValidationError,
   ExternalServiceError,
   env,
 } from '@yulia/core';
-import type { Json, PromptRow } from '@yulia/db';
+import type { Json, PromptRow, SceneRow } from '@yulia/db';
 import {
   VideoGenerationService,
   ImageGenerationService,
@@ -98,60 +97,45 @@ export class SceneGenerationService {
     const prompt = await this.ctx.repos.prompts.getActiveByScene(sceneId);
     if (!prompt) throw new ValidationError('No active prompt for scene', { sceneId });
 
-    // Overlay treatment (decided at segmentation, stored on the scene):
-    //   IMAGE -> product beat: unique background + a portrait overlay window.
-    //   VIDEO -> full-frame breather: background only (NO overlay), and the
-    //            background uses the SHARED interstitial seed/prompt so all such
-    //            scenes recur the same establishing look (background reuse).
-    const hasOverlay = sceneHasOverlay(scene.visual_type);
+    // A scene is shown from its own start until the NEXT scene starts (the render
+    // tiles the timeline this way), so its on-screen span can exceed its own
+    // narration length when a long wordless gap follows it. Compute that display
+    // span here so the background clip count covers the whole span with distinct
+    // footage instead of looping a short assembly (the "looped for 2 min" bug).
+    const displaySpanSec = await this.displaySpanSec(projectId, scene);
 
-    // Generate the required layer(s) concurrently. Each layer polls 69Labs
-    // independently and is idempotent (a retry only re-runs the layer that
-    // failed), so a scene's wall-clock is max over its layers. The SUBMIT
-    // moment (not the poll loop) is staggered a little per layer — see
-    // SUBMIT_STAGGER_MS — so a single scene doesn't fire up to 4 simultaneous
-    // POST /generate calls in the same instant; combined across the worker's
-    // concurrent scenes that burst is what trips 69Labs' concurrent-job cap
-    // (much lower than its per-minute rate limit — see SixtyNineLabsClient).
-    // Background is several ~8s clips played back-to-back so the scene fills at
-    // normal speed instead of stretching/freezing a single clip. One VIDEO_CLIP
-    // asset per sequence slot, each with a distinct seed (so the clips differ)
-    // but the SAME prompt (so they stay in the same world/grade).
-    const backgroundCount = backgroundClipCountForDuration(scene.duration_sec);
+    // Videos and images are now SEPARATE full-frame scenes (no picture-in-
+    // picture). A scene generates EITHER one full-frame image OR several video
+    // clips — never both — so the asset count (and generation time) drops.
     const layers: Promise<void>[] = [];
-    for (let slot = 0; slot < backgroundCount; slot++) {
+    if (sceneIsFullFrameImage(scene.visual_type)) {
+      // IMAGE scene: exactly one full-frame (16:9) image, no video clip.
       layers.push(
         this.runLayer(
           projectId,
           sceneId,
-          'video',
-          slot,
-          // Factory: `regen` (0 on first try, 1.. on hand-check retries) varies
-          // the seed so a regenerated clip actually differs from the rejected one.
-          (regen) => this.backgroundRequest(projectId, sceneId, prompt, slot, regen),
-          slot * SUBMIT_STAGGER_MS,
+          'image',
+          0,
+          () => this.fullFrameImageRequest(projectId, sceneId, prompt),
+          0,
         ),
       );
-    }
-    if (hasOverlay) {
-      // Product scenes rotate 1–2 overlay images (each on screen ~5–8s), so a
-      // longer scene gets a second, distinct overlay. Generate one IMAGE asset
-      // per slot with its own prompt + seed.
-      const overlayCount = overlayCountForDuration(scene.duration_sec);
-      for (let slot = 0; slot < overlayCount; slot++) {
+    } else {
+      // VIDEO scene: several ~8s clips played back-to-back to fill the display
+      // span at normal speed (sized to the on-screen span, gap-aware). Each slot
+      // gets a distinct seed but the same prompt (one continuous world/grade).
+      const backgroundCount = backgroundClipCountForDuration(displaySpanSec);
+      for (let slot = 0; slot < backgroundCount; slot++) {
         layers.push(
           this.runLayer(
             projectId,
             sceneId,
-            'image',
+            'video',
             slot,
-            // Overlays don't get the hand check (bare product, no people), so the
-            // factory ignores the regen nonce and returns the same request.
-            () => this.overlayRequest(projectId, sceneId, prompt, slot),
-            // Stagger overlays AFTER the background clips so a scene's whole
-            // burst of POST /generate calls spreads out (backgroundCount videos
-            // first, then the images).
-            (backgroundCount + slot) * SUBMIT_STAGGER_MS,
+            // Factory: `regen` (0 on first try, 1.. on hand-check retries) varies
+            // the seed so a regenerated clip actually differs from the rejected one.
+            (regen) => this.backgroundRequest(projectId, sceneId, prompt, slot, regen),
+            slot * SUBMIT_STAGGER_MS,
           ),
         );
       }
@@ -164,6 +148,29 @@ export class SceneGenerationService {
       { projectId, sceneId },
     );
     this.ctx.logger.info({ projectId, sceneId }, 'scene layers generated; download dispatched');
+  }
+
+  /**
+   * On-screen span of a scene = from its start until the NEXT scene starts (the
+   * render tiles the timeline by scene start times). For the LAST scene it runs
+   * to the transcript/audio end. This can exceed the scene's own narration length
+   * across a wordless gap; the background clip count is sized to THIS so a long
+   * hold is covered by distinct clips rather than a long loop. Falls back to the
+   * scene's own duration if neighbors/transcript are unavailable.
+   */
+  private async displaySpanSec(projectId: string, scene: SceneRow): Promise<number> {
+    const scenes = await this.ctx.repos.scenes.listByProject(projectId);
+    const idx = scenes.findIndex((s) => s.id === scene.id);
+    const next = idx >= 0 ? scenes[idx + 1] : undefined;
+    let end: number;
+    if (next) {
+      end = next.start_sec;
+    } else {
+      const transcript = await this.ctx.repos.transcripts.findByProject(projectId).catch(() => null);
+      end = transcript?.duration_sec ?? scene.end_sec;
+    }
+    const span = end - scene.start_sec;
+    return span > 0 ? span : scene.duration_sec;
   }
 
   /**
@@ -349,36 +356,31 @@ export class SceneGenerationService {
   }
 
   /**
-   * Overlay layer for rotation `slot`. Slot 0 uses `overlayPrompt`; slot 1 uses
-   * the distinct `overlayPrompt2` (falling back to the primary if the model
-   * didn't provide one). The seed is slot-distinct so the two overlays differ.
+   * Full-frame IMAGE scene: one wide 16:9 image that fills the whole screen (no
+   * longer a portrait overlay window). Uses the scene's image prompt, falling
+   * back to the (older) overlay prompt or the background prompt for projects
+   * prompted before the full-frame-image format.
    */
-  private overlayRequest(
+  private fullFrameImageRequest(
     projectId: string,
     sceneId: string,
     prompt: PromptRow,
-    slot: number,
   ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
-    // Fall back to the background prompt for projects prompted before the
-    // two-layer format existed.
-    const primary = asString(params.overlayPrompt, prompt.positive_prompt);
-    const overlayPrompt = slot === 0 ? primary : asString(params.overlayPrompt2, primary);
-    const overlayNegative = asString(params.overlayNegativePrompt, '');
+    const imagePrompt = asString(
+      params.imagePrompt,
+      asString(params.overlayPrompt, prompt.positive_prompt),
+    );
+    const imageNegative = asString(params.imageNegativePrompt, asString(params.overlayNegativePrompt, ''));
     return {
-      prompt: withRealismPreamble(overlayPrompt),
-      // Same guarantee as the background: always attach the anatomy/quality
-      // negative baseline (merged with the overlay's own when present) so a bare
-      // or missing overlayNegativePrompt can never ship without the anti-"extra
-      // hands" guard — the overlay is where a stray hand fuses with the
-      // background's hands into an impossible body.
-      negativePrompt: mergeNegativePrompt(overlayNegative),
-      aspectRatio: asString(params.overlayAspectRatio, PIP_LAYOUT.overlayAspectRatio),
-      // Slot in the seed so each overlay is a distinct image (slot 0 keeps the
-      // original single-overlay seed for continuity with pre-rotation projects).
-      seed: slot === 0
-        ? seedFrom(projectId, sceneId, 'image')
-        : seedFrom(projectId, sceneId, 'image', String(slot)),
+      prompt: withRealismPreamble(imagePrompt),
+      // Always attach the anatomy/quality negative baseline (a full-frame image
+      // can show a person, so the anti-"extra hands" guard still applies).
+      negativePrompt: mergeNegativePrompt(imageNegative),
+      // Full-frame image now matches the render orientation (wide), not a 3:4
+      // portrait window.
+      aspectRatio: PIP_LAYOUT.backgroundAspectRatio,
+      seed: seedFrom(projectId, sceneId, 'image'),
     };
   }
 

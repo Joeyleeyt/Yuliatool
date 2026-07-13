@@ -1,15 +1,16 @@
 import { join } from 'node:path';
 import { RENDER_ENCODING, TRANSITION, RenderError, mapLimit, env } from '@yulia/core';
 import { ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
-import { compositeScene } from './normalize.js';
+import { compositeFullFrameVideo, compositeFullFrameImage } from './normalize.js';
 import { probe } from './ffprobe.js';
 import type { RenderInput, RenderOutput, RenderSegment } from './types.js';
 
 /**
- * Composite a single scene's two layers into one normalized clip. Exposed
- * separately from `renderVideo` so callers (RenderService) can pipeline it
- * directly after each scene's assets finish downloading, instead of waiting
- * for every scene to download before compositing starts.
+ * Composite one scene into a normalized WxH clip. Videos and images are separate
+ * full-frame scenes: an IMAGE scene (`imagePath`) renders the still full-screen
+ * with a slow Ken Burns move; a VIDEO scene (`backgroundPaths`) plays its clips
+ * back-to-back at full frame. Exposed separately from `renderVideo` so callers
+ * (RenderService) can pipeline it right after each scene's assets download.
  *
  * Sync guarantee: non-last segments are composited to `displayDuration + T` so
  * the crossfade chain's overlap comes out of the added `T`, not the segment's
@@ -26,21 +27,13 @@ export async function compositeSegment(
   const T = TRANSITION.durationSec;
   const targetLen = isLast ? seg.displayDurationSec : seg.displayDurationSec + T;
   const out = join(workDir, `scene_${String(index).padStart(4, '0')}.mp4`);
+  const o = { width, height, fps, durationSec: targetLen };
 
-  // Title cards are disabled per client feedback ("the text can be removed"): no
-  // burned-in "#N / TITLE" overlay. Pass `undefined` so compositeScene skips the
-  // drawtext chain entirely. Re-enable by threading seg.titleText/itemNumber back
-  // through here if the numbered listicle labels are wanted again.
-  await compositeScene(
-    seg.backgroundPaths,
-    seg.overlayPaths,
-    seg.overlayPosition,
-    out,
-    { width, height, fps, durationSec: targetLen },
-    undefined,
-    seg.overlayMotions,
-    seg.overlayTransition,
-  );
+  if (seg.imagePath) {
+    await compositeFullFrameImage(seg.imagePath, out, o);
+  } else {
+    await compositeFullFrameVideo(seg.backgroundPaths, out, o);
+  }
   return out;
 }
 
@@ -58,6 +51,13 @@ export async function concatAndMux(input: {
   normalized: string[];
   displayDurations: number[];
   voiceoverPath: string;
+  /**
+   * Optional global background-music track. When set, it's looped to the full
+   * video length and mixed UNDER the voiceover at `musicDuckDb` dB. Absent ->
+   * voiceover-only (unchanged behavior).
+   */
+  musicPath?: string;
+  musicDuckDb?: number;
   outputPath: string;
   width: number;
   height: number;
@@ -100,16 +100,37 @@ export async function concatAndMux(input: {
   }
   input.onProgress?.({ percent: 88, stage: 'concat' });
 
-  // Mux the original voiceover (copy video, high-quality AAC audio).
+  // Mux the voiceover (copy video, high-quality AAC audio). When a global music
+  // track is supplied, loop it to the full length and mix it UNDER the voiceover
+  // at the duck level; otherwise the audio is the voiceover alone. `-shortest`
+  // trims to the (silent) video length either way.
+  const audioArgs = input.musicPath
+    ? [
+        // Music is input 2, looped indefinitely (-stream_loop before -i) so it
+        // covers any video length; the mix's duration=first + -shortest trim it.
+        '-i',
+        input.voiceoverPath,
+        '-stream_loop',
+        '-1',
+        '-i',
+        input.musicPath,
+        '-filter_complex',
+        // Attenuate music by |duckDb|, then mix under the voiceover. normalize=0
+        // keeps the voiceover at full level (no auto gain reduction); duration=
+        // first ends the mix with the voiceover/video, not the looped music.
+        `[2:a]volume=${input.musicDuckDb ?? -20}dB[m];` +
+          `[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`,
+        '-map',
+        '0:v:0',
+        '-map',
+        '[aout]',
+      ]
+    : ['-i', input.voiceoverPath, '-map', '0:v:0', '-map', '1:a:0'];
+
   await runFfmpeg([
     '-i',
     silent,
-    '-i',
-    input.voiceoverPath,
-    '-map',
-    '0:v:0',
-    '-map',
-    '1:a:0',
+    ...audioArgs,
     '-c:v',
     'copy',
     '-c:a',

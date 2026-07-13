@@ -6,17 +6,13 @@ import { pipeline } from 'node:stream/promises';
 import {
   AssetKind,
   ProjectStatus,
-  resolveOverlayPosition,
-  sceneHasOverlay,
+  sceneIsFullFrameImage,
   mapLimit,
   NotFoundError,
   ValidationError,
   R2_PREFIX,
   RENDER_DIMENSIONS,
   RENDER_ENCODING,
-  OverlayPosition,
-  OverlayMotion,
-  OverlayTransition,
   env,
 } from '@yulia/core';
 import type { SceneRow, Json } from '@yulia/db';
@@ -84,6 +80,12 @@ export class RenderService {
       const voicePath = join(workDir, 'voiceover');
       await this.download(voiceover.r2_key, voicePath);
 
+      // Global background music: one fixed R2 object shared by every render. If
+      // it's present, download it and mix it under the voiceover; if it's absent
+      // (never uploaded), render voiceover-only — the music is optional, never a
+      // hard dependency, so a missing track must not fail the project.
+      const musicPath = await this.tryDownloadMusic(workDir);
+
       await this.ctx.repos.renders.update(renderId, { status: 'normalizing', progress: 10 });
 
       // Download each scene's assets AND composite it in one pooled pass, so
@@ -130,6 +132,7 @@ export class RenderService {
         normalized,
         displayDurations,
         voiceoverPath: voicePath,
+        ...(musicPath ? { musicPath, musicDuckDb: env.MUSIC_DUCK_DB } : {}),
         outputPath,
         width,
         height,
@@ -207,60 +210,11 @@ export class RenderService {
     height: number,
     onProgress: (done: number, total: number) => void,
   ): Promise<{ normalized: string[]; displayDurations: number[] }> {
-    // Derive the listicle item number + title-card scene up front (mapLimit runs
-    // concurrently, so a running counter inside it would race). A new item begins
-    // at the first scene and whenever the scene title changes; the title card is
-    // burned only on that first scene of the item.
-    const itemMeta = computeItemMeta(scenes);
     const N = scenes.length;
     let done = 0;
 
     const results = await mapLimit(scenes, env.RENDER_COMPOSITE_CONCURRENCY, async (scene, i) => {
       const pad = String(i).padStart(4, '0');
-
-      // Product beats have a background + 1–2 rotated overlays; video-only beats
-      // are full-frame background only (no overlay was generated).
-      const hasOverlay = sceneHasOverlay(scene.visual_type);
-
-      // A scene's background is one or more ~8s clips (slots) played back-to-
-      // back to fill the scene at normal speed. Download every stored slot in
-      // sequence order. (Projects generated before multi-clip backgrounds have
-      // exactly one, slot 0 — same code path.)
-      const backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(
-        (b) => b.status === 'stored' && b.r2_key,
-      );
-      if (backgrounds.length === 0)
-        throw new ValidationError('Scene background missing', { sceneId: scene.id });
-
-      const backgroundPaths: string[] = [];
-      const downloads: Promise<void>[] = [];
-      backgrounds.forEach((bg, slot) => {
-        const p = join(workDir, `bg_${pad}_${slot}`);
-        backgroundPaths.push(p);
-        downloads.push(this.download(bg.r2_key!, p));
-      });
-
-      // Download every stored overlay slot in rotation order. A demoted scene
-      // (visual_type flipped to VIDEO) has none; a product scene has 1–2. The
-      // overlay's editing plan (position/motion/transition) lives on the active
-      // prompt's `parameters`; read it once here so the composite can honor it.
-      const overlayPaths: string[] = [];
-      let overlayPlan: OverlayPlan = {};
-      if (hasOverlay) {
-        const overlays = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE)).filter(
-          (o) => o.status === 'stored' && o.r2_key,
-        );
-        if (overlays.length === 0)
-          throw new ValidationError('Scene overlay missing', { sceneId: scene.id });
-        overlays.forEach((overlay, slot) => {
-          const p = join(workDir, `ov_${pad}_${slot}`);
-          overlayPaths.push(p);
-          downloads.push(this.download(overlay.r2_key!, p));
-        });
-        const prompt = await this.ctx.repos.prompts.getActiveByScene(scene.id);
-        overlayPlan = readOverlayPlan(prompt?.parameters);
-      }
-      await Promise.all(downloads);
 
       // Tile the timeline by scene start times so inter-scene pauses are covered
       // and video length matches the continuous voiceover.
@@ -268,20 +222,35 @@ export class RenderService {
       const displayEnd = next ? next.start_sec : audioDurationSec;
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
-      const meta = itemMeta[i]!;
-      const segment: RenderSegment = {
-        backgroundPaths,
-        overlayPaths, // empty for full-frame video-only scenes
-        // Position from the AI plan (falls back to the alternating side for scenes
-        // prompted before the plan existed). Motions align to overlayPaths by
-        // rotation slot; transition drives the window's entrance.
-        overlayPosition: resolveOverlayPosition(scene.scene_index, overlayPlan.position),
-        ...(overlayPlan.motions ? { overlayMotions: overlayPlan.motions } : {}),
-        ...(overlayPlan.transition ? { overlayTransition: overlayPlan.transition } : {}),
-        displayDurationSec,
-        // Only the first scene of each item carries the title card.
-        ...(meta.showCard ? { titleText: meta.titleText, itemNumber: meta.itemNumber } : {}),
-      };
+      // Videos and images are SEPARATE full-frame scenes. Download the ONE kind
+      // this scene has and build the matching segment.
+      let segment: RenderSegment;
+      if (sceneIsFullFrameImage(scene.visual_type)) {
+        // IMAGE scene: one full-frame still (slot 0), rendered full-screen.
+        const image = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE)).find(
+          (a) => a.status === 'stored' && a.r2_key,
+        );
+        if (!image?.r2_key) throw new ValidationError('Scene image missing', { sceneId: scene.id });
+        const imagePath = join(workDir, `img_${pad}`);
+        await this.download(image.r2_key, imagePath);
+        segment = { backgroundPaths: [], imagePath, displayDurationSec };
+      } else {
+        // VIDEO scene: one or more ~8s clips played back-to-back at full frame.
+        const backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(
+          (b) => b.status === 'stored' && b.r2_key,
+        );
+        if (backgrounds.length === 0)
+          throw new ValidationError('Scene background missing', { sceneId: scene.id });
+        const backgroundPaths: string[] = [];
+        await Promise.all(
+          backgrounds.map((bg, slot) => {
+            const p = join(workDir, `bg_${pad}_${slot}`);
+            backgroundPaths.push(p);
+            return this.download(bg.r2_key!, p);
+          }),
+        );
+        segment = { backgroundPaths, displayDurationSec };
+      }
 
       const normalizedPath = await compositeSegment(segment, i, i === N - 1, { width, height, workDir });
       done += 1;
@@ -299,89 +268,26 @@ export class RenderService {
     const stream = await this.ctx.storage.getObjectStream(key);
     await pipeline(stream, createWriteStream(dest));
   }
-}
 
-/**
- * The overlay editing plan read off a scene's active prompt `parameters`. All
- * fields optional: a scene prompted before the plan existed (or where the model
- * returned null) leaves them unset, and the renderer falls back to its
- * deterministic defaults (alternating side, soft slow-zoom-in, crossfade).
- */
-interface OverlayPlan {
-  position?: OverlayPosition;
-  /** Per-slot motion (index 0 = primary overlay, 1 = second rotated overlay). */
-  motions?: OverlayMotion[];
-  transition?: OverlayTransition;
-}
-
-const POSITIONS = new Set<string>(Object.values(OverlayPosition));
-const MOTIONS = new Set<string>(Object.values(OverlayMotion));
-const TRANSITIONS = new Set<string>(Object.values(OverlayTransition));
-
-/**
- * Extract + validate the overlay editing plan from a prompt row's `parameters`
- * jsonb. Only known enum values are accepted (anything else is ignored, so a
- * malformed/legacy value can't reach ffmpeg). The two per-slot motions become a
- * `motions` array aligned to the overlay rotation (slot 1 inherits slot 0 when
- * `overlayMotion2` is absent).
- */
-function readOverlayPlan(parameters: unknown): OverlayPlan {
-  if (!parameters || typeof parameters !== 'object') return {};
-  const p = parameters as Record<string, unknown>;
-  const plan: OverlayPlan = {};
-
-  if (typeof p.overlayPosition === 'string' && POSITIONS.has(p.overlayPosition)) {
-    plan.position = p.overlayPosition as OverlayPosition;
-  }
-  if (typeof p.overlayTransition === 'string' && TRANSITIONS.has(p.overlayTransition)) {
-    plan.transition = p.overlayTransition as OverlayTransition;
-  }
-
-  const m0 =
-    typeof p.overlayMotion === 'string' && MOTIONS.has(p.overlayMotion)
-      ? (p.overlayMotion as OverlayMotion)
-      : null;
-  const m1 =
-    typeof p.overlayMotion2 === 'string' && MOTIONS.has(p.overlayMotion2)
-      ? (p.overlayMotion2 as OverlayMotion)
-      : null;
-  // Only emit motions when the plan set at least the primary; slot 1 inherits
-  // slot 0 when no distinct second motion was chosen.
-  if (m0) plan.motions = [m0, m1 ?? m0];
-
-  return plan;
-}
-
-interface ItemMeta {
-  /** Whether this scene is the first of its item (and thus shows the title card). */
-  showCard: boolean;
-  /** 1-based item ordinal, defined only on the first scene of the item. */
-  itemNumber?: number;
-  /** Display title for the card, defined only on the first scene of the item. */
-  titleText?: string;
-}
-
-/**
- * Assign each scene an item ordinal + title-card flag. A new listicle item
- * starts at the first scene and whenever the (trimmed) title changes from the
- * previous scene, so one item can span several scenes. The card is shown only
- * on the item's first scene, and only when it has a non-empty title.
- */
-function computeItemMeta(scenes: SceneRow[]): ItemMeta[] {
-  const out: ItemMeta[] = [];
-  let itemNumber = 0;
-  let prevTitle: string | null = null;
-
-  for (const scene of scenes) {
-    const title = (scene.title ?? '').trim();
-    const isNewItem = out.length === 0 || title !== prevTitle;
-    if (isNewItem) {
-      itemNumber += 1;
-      prevTitle = title;
-      out.push(title ? { showCard: true, itemNumber, titleText: title } : { showCard: false });
-    } else {
-      out.push({ showCard: false });
+  /**
+   * Fetch the global background-music track from its fixed R2 key, if it exists.
+   * Returns the local path, or `undefined` when no music has been uploaded (the
+   * common state until the file is put in place) — the render then stays
+   * voiceover-only. Any download error is likewise swallowed to `undefined`:
+   * music is a nice-to-have, never a reason to fail an otherwise-good render.
+   */
+  private async tryDownloadMusic(workDir: string): Promise<string | undefined> {
+    const key = R2_PREFIX.music();
+    try {
+      const head = await this.ctx.storage.headObject(key);
+      if (!head) return undefined; // never uploaded -> voiceover-only
+      const dest = join(workDir, 'music.mp3');
+      await this.download(key, dest);
+      this.ctx.logger.info({ key }, 'render: background music found; will mix under voiceover');
+      return dest;
+    } catch (err) {
+      this.ctx.logger.warn({ err, key }, 'render: music fetch failed; rendering voiceover-only');
+      return undefined;
     }
   }
-  return out;
 }

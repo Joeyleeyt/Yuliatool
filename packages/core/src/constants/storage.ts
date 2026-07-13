@@ -14,6 +14,11 @@ import { AssetKind } from '../enums/asset.js';
  */
 export const R2_PREFIX = {
   project: (projectId: string) => `projects/${projectId}`,
+  // GLOBAL background-music track — one file shared by EVERY render (not project-
+  // scoped), so it lives at a fixed top-level key. Uploaded once (out of band, via
+  // the R2 dashboard); the render fetches it if present and mixes it under the
+  // voiceover, and silently skips music if the object is absent. See MUSIC_KEY.
+  music: () => MUSIC_KEY,
   voiceover: (projectId: string, assetId: string, ext: string) =>
     `projects/${projectId}/voiceover/${assetId}.${ext}`,
   // A scene may hold multiple background clips (played back-to-back to fill the
@@ -36,6 +41,23 @@ export const R2_PREFIX = {
     `projects/${projectId}/renders/${renderId}.jpg`,
   temp: (projectId: string, token: string) => `projects/${projectId}/tmp/${token}`,
 } as const;
+
+/**
+ * Fixed R2 key for the global background-music track. Upload one MP3 here (via
+ * the R2 dashboard) and every render mixes it under the voiceover; if no object
+ * exists at this key the render is voiceover-only (no error). Kept as an MP3 at
+ * a stable name so the upload target never changes.
+ */
+export const MUSIC_KEY = 'music/background.mp3';
+
+/**
+ * Background-music mix defaults. `duckDb` is how far BELOW the voiceover the
+ * music sits (negative dB = quieter); -20 dB is clearly audible but never
+ * competes with speech. The render loops the track to the full video length and
+ * mixes it under the voiceover (no fades — plays flat, per client). Exposed via
+ * env (MUSIC_DUCK_DB) so it's tunable after hearing a render without a rebuild.
+ */
+export const MUSIC_MIX = { duckDb: -20 } as const;
 
 export const ASSET_KIND_EXT: Partial<Record<AssetKind, string>> = {
   [AssetKind.VIDEO_CLIP]: 'mp4',
