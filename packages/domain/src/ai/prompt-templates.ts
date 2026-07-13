@@ -114,6 +114,18 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
     `keep at most ONE person's hands in any close shot. Prefer showing the product with NO hands ` +
     `at all when hands aren't essential.\n\n` +
+    `STORY-FIRST ENVIRONMENT — choose each scene's LOCATION from the MEANING of the narration, not ` +
+    `by defaulting to a bedroom/living-room/sofa. Ask: what is being discussed, what emotion, and ` +
+    `where would this naturally happen? Then set the scene THERE. E.g. a morning routine → elegant ` +
+    `bathroom / dressing room / kitchen / balcony; reading → library / reading corner / café / ` +
+    `garden; relaxation → spa / bath / resort / beach; coffee → café terrace / kitchen island; ` +
+    `reflection → lakeside / window during rain / quiet garden; dining → elegant restaurant / ` +
+    `terrace; travel → hotel suite / airport lounge / scenic overlook. Pull from the full luxury ` +
+    `palette (designer kitchen, boutique hotel, spa, private villa, rooftop terrace, bookstore, ` +
+    `art gallery, flower shop, botanical/Japanese garden, forest path, ocean overlook, wine bar, ` +
+    `yoga studio, Mediterranean courtyard, European street, …). VARY it across consecutive scenes; ` +
+    `never park every beat in the same room. The location must feel like the obvious place the ` +
+    `narration would naturally occur while staying within the warm quiet-luxury grade.\n\n` +
     `1) BACKGROUND — a wide, 16:9, ~8-second PHOTOREALISTIC LIVE-ACTION VIDEO clip that looks ` +
     `filmed on a professional cinema camera for a luxury fashion / premium hotel commercial (Dior, ` +
     `Chanel, Aman, Apple, a Netflix lifestyle documentary) — NOT AI artwork, illustration, a ` +
@@ -126,12 +138,26 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `gentle hand and hair movement) — never a frozen pose, a still photograph, a faceless/headless ` +
     `body, floating clothes, or a fashion mannequin. Restate the anatomy count in the prompt ` +
     `(exactly one woman, two hands, five fingers each, anatomically correct).\n` +
-    `   ACTION — give her ONE meaningful, grounded action that connects to the narration, chosen ` +
-    `from the kind of quiet luxury rituals this channel lives in: pouring tea or coffee, arranging ` +
-    `white peonies in a vase, reading or writing in a journal, touching or folding silk/linen, ` +
-    `lighting a candle, holding a cup, adjusting a cuff or sleeve, opening curtains at the window. ` +
-    `Never reduce her to "standing", "posing", or "wearing a dress" — she is always DOING ` +
-    `something.\n` +
+    `   ACTION — give her ONE meaningful primary action that connects to the narration, chosen from ` +
+    `the quiet-luxury rituals this channel lives in: pouring tea or coffee, arranging white peonies ` +
+    `in a vase, reading or writing in a journal, touching or folding silk/linen, lighting a candle, ` +
+    `holding a cup, adjusting a cuff or sleeve, opening curtains at the window. She performs it like ` +
+    `a professional actress: the action begins, completes, and then she SETTLES into a relaxed, ` +
+    `natural posture — not an endless repeating gesture. Never reduce her to "standing", "posing", ` +
+    `or "wearing a dress" — she is always DOING something, but only ONE thing.\n` +
+    `   PERFORMANCE — every movement has intention; NO meaningless idle filler. Hands stay relaxed ` +
+    `unless interacting with an object. FORBID the tell-tale AI-idle tics: finger wringing, rubbing ` +
+    `fingertips, repetitive hand rubbing, wrist twisting, neck wringing or exaggerated neck ` +
+    `rotation, shoulder rolling, repeated sleeve-pulling, repeatedly touching hair/jewelry, repeated ` +
+    `dress adjustments, body swaying, robotic looping, exaggerated breathing/blinking. Do NOT ` +
+    `animate fingers or rotate wrists merely to create motion.\n` +
+    `   NATURAL TRANSITION MOVEMENT (highest-priority motion rule) — the body moves directly and ` +
+    `efficiently along the SHORTEST natural path into the action, the way a real person ` +
+    `unconsciously would. FORBID exaggerated wind-up / anticipation: no spreading or splaying the ` +
+    `fingers before reaching, no wrist rotation before contact, no curling-and-uncurling, no elbow/` +
+    `shoulder swing to "prepare" for a simple reach. GOOD: relaxed hand → smooth reach → gentle ` +
+    `contact → complete the action → relaxed hand. BAD: fingers spread → wrist rotates → fingers ` +
+    `wiggle → hand twists → touch.\n` +
     `   MOTION REALISM (critical — the video model breaks physics on big movement): keep the action ` +
     `GROUNDED and local — feet planted, hands within a natural reach, the ambient camera + light + ` +
     `steam + a light fabric settle carrying most of the motion. NEVER describe her walking across ` +
@@ -234,6 +260,13 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `standing or posing, never a frozen still. Keep her action LOCAL and grounded (feet planted, ` +
     `natural reach); carry the rest of the motion with ambient camera, light, steam, a light ` +
     `fabric settle — do NOT write that she walks, strolls, moves through, or crosses the room.\n\n` +
+    `SET THE ENVIRONMENT from THIS narration's meaning (not a default bedroom/living-room): put the ` +
+    `beat in the place it would naturally happen (bath/spa for relaxation, café/kitchen for coffee, ` +
+    `library/garden for reading, restaurant/terrace for dining, window/lakeside for reflection, …), ` +
+    `varied from the neighbouring scenes, within the warm quiet-luxury grade. Keep her performance ` +
+    `intentional — ONE action that completes then settles; NO idle filler (no finger wringing, ` +
+    `wrist twisting, neck rotation, hair/jewelry touching, swaying) and NO exaggerated wind-up ` +
+    `before a reach — shortest natural path, relaxed hand → reach → contact → complete → relaxed.\n\n` +
     `Finally, the OVERLAY EDITING PLAN — choose these deliberately for THIS beat (not by rote):\n` +
     `- overlayPosition: left, center, or right (center only when the overlay should replace the ` +
     `background as a full mood/lifestyle moment; otherwise the side that best preserves the focal ` +
