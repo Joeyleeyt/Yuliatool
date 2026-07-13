@@ -3,7 +3,8 @@ import {
   ProjectStatus,
   QueueName,
   PIP_LAYOUT,
-  sceneIsFullFrameImage,
+  sceneRendersAsGallery,
+  imageCountForDuration,
   backgroundClipCountForDuration,
   NotFoundError,
   ValidationError,
@@ -108,18 +109,26 @@ export class SceneGenerationService {
     // picture). A scene generates EITHER one full-frame image OR several video
     // clips — never both — so the asset count (and generation time) drops.
     const layers: Promise<void>[] = [];
-    if (sceneIsFullFrameImage(scene.visual_type)) {
-      // IMAGE scene: exactly one full-frame (16:9) image, no video clip.
-      layers.push(
-        this.runLayer(
-          projectId,
-          sceneId,
-          'image',
-          0,
-          () => this.fullFrameImageRequest(projectId, sceneId, prompt),
-          0,
-        ),
-      );
+    if (sceneRendersAsGallery(scene.visual_type, displaySpanSec)) {
+      // GALLERY scene: several distinct full-frame (16:9) stills that the render
+      // rotates through (Ken Burns + crossfade) to fill the on-screen span — a
+      // held IMAGE beat OR a VIDEO beat held past a long wordless gap. No video
+      // clip. Count is sized to the display span (~one still per IMAGE_SLOT_SEC).
+      // This is the SINGLE span-based image/video decision; download + render
+      // follow whichever assets this produces, so they can never disagree.
+      const imageCount = imageCountForDuration(displaySpanSec);
+      for (let slot = 0; slot < imageCount; slot++) {
+        layers.push(
+          this.runLayer(
+            projectId,
+            sceneId,
+            'image',
+            slot,
+            (regen) => this.fullFrameImageRequest(projectId, sceneId, prompt, slot, regen),
+            slot * SUBMIT_STAGGER_MS,
+          ),
+        );
+      }
     } else {
       // VIDEO scene: several ~8s clips played back-to-back to fill the display
       // span at normal speed (sized to the on-screen span, gap-aware). Each slot
@@ -365,6 +374,8 @@ export class SceneGenerationService {
     projectId: string,
     sceneId: string,
     prompt: PromptRow,
+    slot = 0,
+    regen = 0,
   ): GenerationRequest {
     const params = (prompt.parameters ?? {}) as Record<string, unknown>;
     const imagePrompt = asString(
@@ -372,6 +383,15 @@ export class SceneGenerationService {
       asString(params.overlayPrompt, prompt.positive_prompt),
     );
     const imageNegative = asString(params.imageNegativePrompt, asString(params.overlayNegativePrompt, ''));
+    // Each gallery slot gets a DISTINCT seed so the rotating stills aren't the
+    // same frame; slot 0 keeps the original seed so existing single-image
+    // projects reconcile to the same asset. `regen` (>0 on a hand-check retry)
+    // varies it further so a regenerated still differs. Same prompt across slots
+    // keeps every still in one continuous world/grade within the scene.
+    const seedParts = [
+      ...(slot === 0 ? [] : [String(slot)]),
+      ...(regen > 0 ? [`r${regen}`] : []),
+    ];
     return {
       prompt: withRealismPreamble(imagePrompt),
       // Always attach the anatomy/quality negative baseline (a full-frame image
@@ -380,7 +400,7 @@ export class SceneGenerationService {
       // Full-frame image now matches the render orientation (wide), not a 3:4
       // portrait window.
       aspectRatio: PIP_LAYOUT.backgroundAspectRatio,
-      seed: seedFrom(projectId, sceneId, 'image'),
+      seed: seedFrom(projectId, sceneId, 'image', ...seedParts),
     };
   }
 

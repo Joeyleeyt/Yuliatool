@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { RENDER_ENCODING, TRANSITION, RenderError, mapLimit, env } from '@yulia/core';
 import { ENCODE_ARGS, runFfmpeg } from './ffmpeg-runner.js';
-import { compositeFullFrameVideo, compositeFullFrameImage } from './normalize.js';
+import { compositeFullFrameVideo, compositeImageGallery } from './normalize.js';
 import { probe } from './ffprobe.js';
 import type { RenderInput, RenderOutput, RenderSegment } from './types.js';
 
@@ -29,10 +29,11 @@ export async function compositeSegment(
   const out = join(workDir, `scene_${String(index).padStart(4, '0')}.mp4`);
   const o = { width, height, fps, durationSec: targetLen };
 
-  if (seg.imagePath) {
-    await compositeFullFrameImage(seg.imagePath, out, o);
+  if (seg.imagePaths && seg.imagePaths.length > 0) {
+    // One still → a Ken Burns hold; several → rotating stills across the span.
+    await compositeImageGallery(seg.imagePaths, out, o);
   } else {
-    await compositeFullFrameVideo(seg.backgroundPaths, out, o);
+    await compositeFullFrameVideo(seg.backgroundPaths ?? [], out, o);
   }
   return out;
 }
@@ -70,10 +71,19 @@ export async function concatAndMux(input: {
   const N = normalized.length;
   if (N === 0) throw new RenderError('no segments to render');
 
-  // Crossfade chain -> silent video.
+  // Smooth ending: fade the picture (and later the audio) out over the last
+  // `outroFadeSec` instead of cutting hard on the final frame. Total video length
+  // is Σ displayDurations (crossfades come out of the added T), so the fade
+  // starts that far in, minus the fade length. Clamp for very short videos.
+  const total = displayDurations.reduce((a, b) => a + b, 0);
+  const outro = Math.max(0, Math.min(TRANSITION.outroFadeSec, total / 2));
+  const fadeStart = Math.max(0, total - outro);
+  const outroFilter = `fade=t=out:st=${fadeStart.toFixed(3)}:d=${outro.toFixed(3)}`;
+
+  // Crossfade chain -> silent video (with the outro fade-to-black baked in).
   const silent = join(workDir, 'silent.mp4');
   if (N === 1) {
-    await runFfmpeg(['-i', normalized[0]!, '-an', '-c:v', 'copy', silent]);
+    await runFfmpeg(['-i', normalized[0]!, '-an', '-vf', outroFilter, ...ENCODE_ARGS, silent]);
   } else {
     const inputs = normalized.flatMap((p) => ['-i', p]);
     const parts: string[] = [];
@@ -81,12 +91,14 @@ export async function concatAndMux(input: {
     let offset = 0;
     for (let k = 1; k < N; k++) {
       offset += displayDurations[k - 1]!;
-      const label = k === N - 1 ? 'vout' : `vx${k}`;
+      const label = `vx${k}`;
       parts.push(
         `[${last}][${k}:v]xfade=transition=fade:duration=${T}:offset=${offset.toFixed(3)}[${label}]`,
       );
       last = label;
     }
+    // Fade the assembled chain to black over the final `outro` seconds.
+    parts.push(`[${last}]${outroFilter}[vout]`);
     await runFfmpeg([
       ...inputs,
       '-filter_complex',
@@ -104,6 +116,9 @@ export async function concatAndMux(input: {
   // track is supplied, loop it to the full length and mix it UNDER the voiceover
   // at the duck level; otherwise the audio is the voiceover alone. `-shortest`
   // trims to the (silent) video length either way.
+  // Match the picture's outro with an audio fade-out so the film doesn't cut to
+  // silence on the last word.
+  const afade = `afade=t=out:st=${fadeStart.toFixed(3)}:d=${outro.toFixed(3)}`;
   const audioArgs = input.musicPath
     ? [
         // Music is input 2, looped indefinitely (-stream_loop before -i) so it
@@ -118,14 +133,16 @@ export async function concatAndMux(input: {
         // Attenuate music by |duckDb|, then mix under the voiceover. normalize=0
         // keeps the voiceover at full level (no auto gain reduction); duration=
         // first ends the mix with the voiceover/video, not the looped music.
+        // Then fade the mixed track out over the outro.
         `[2:a]volume=${input.musicDuckDb ?? -20}dB[m];` +
-          `[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`,
+          `[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[amixed];` +
+          `[amixed]${afade}[aout]`,
         '-map',
         '0:v:0',
         '-map',
         '[aout]',
       ]
-    : ['-i', input.voiceoverPath, '-map', '0:v:0', '-map', '1:a:0'];
+    : ['-i', input.voiceoverPath, '-map', '0:v:0', '-map', '1:a:0', '-af', afade];
 
   await runFfmpeg([
     '-i',

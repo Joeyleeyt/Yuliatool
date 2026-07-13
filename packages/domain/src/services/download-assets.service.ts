@@ -6,7 +6,6 @@ import {
   QueueName,
   SceneVisualType,
   sceneHasOverlay,
-  sceneIsFullFrameImage,
   NotFoundError,
   ValidationError,
   R2_PREFIX,
@@ -66,10 +65,13 @@ export class DownloadAssetsService {
 
     await this.ctx.repos.scenes.updateStatus(sceneId, 'downloading');
 
-    // Videos and images are SEPARATE full-frame scenes now. Download the ONE
-    // kind this scene has, then mark it stored for fan-in.
-    if (sceneIsFullFrameImage(scene.visual_type)) {
-      await this.downloadImageScene(projectId, sceneId, scene);
+    // Videos and gallery stills are SEPARATE full-frame scenes. Follow whichever
+    // assets generation actually produced (its span-based gallery decision is the
+    // single source of truth) rather than re-deciding from visual_type: a VIDEO
+    // scene held past a long wordless gap is generated as gallery stills.
+    const images = await this.ctx.repos.assets.listSceneImages(sceneId, AssetKind.IMAGE);
+    if (images.length > 0) {
+      await this.downloadImageScene(projectId, sceneId, scene, images);
     } else {
       await this.downloadVideoScene(projectId, sceneId, scene);
     }
@@ -116,23 +118,46 @@ export class DownloadAssetsService {
   }
 
   /**
-   * IMAGE scene: download its single full-frame image (slot 0). If the image
-   * can't be produced, borrow a similar scene's already-stored VIDEO as a
-   * stand-in and flip this scene to VIDEO so the render treats it as a clip
-   * rather than a missing image — a stand-in beats wedging the project.
+   * GALLERY scene: download its full-frame stills — one or several slots that the
+   * render rotates through. Slot 0 is REQUIRED — if it can't be produced, borrow a
+   * similar scene's already-stored VIDEO as a stand-in and flip this scene to
+   * VIDEO so the render treats it as a clip rather than a missing image. Later
+   * slots are best-effort: a shortfall just rotates fewer stills at render time.
    */
-  private async downloadImageScene(projectId: string, sceneId: string, scene: SceneRow): Promise<void> {
-    try {
-      await this.downloadLayer(projectId, sceneId, 'image', scene.duration_sec, 0);
-    } catch (err) {
-      const donor = await this.reuseSimilarBackground(projectId, scene);
-      if (!donor) throw err; // no stand-in yet -> retry
-      // The borrowed stand-in is a video clip; render this scene as video.
-      await this.ctx.repos.scenes.setVisualType(sceneId, SceneVisualType.VIDEO);
-      this.ctx.logger.warn(
-        { projectId, sceneId, donorSceneId: donor.sceneId, via: donor.via, err },
-        `image unavailable; borrowed ${donor.via} scene video and flipped scene to VIDEO`,
-      );
+  private async downloadImageScene(
+    projectId: string,
+    sceneId: string,
+    scene: SceneRow,
+    images: { metadata: Json }[],
+  ): Promise<void> {
+    // Attempt slot 0 first (it's the required one), then the rest.
+    const slots = [...new Set(images.map((img) => overlaySlotOf(img)))].sort((a, b) => a - b);
+    let stored = 0;
+    for (const slot of slots) {
+      try {
+        await this.downloadLayer(projectId, sceneId, 'image', scene.duration_sec, slot);
+        stored += 1;
+      } catch (err) {
+        if (slot !== 0) {
+          this.ctx.logger.warn(
+            { projectId, sceneId, slot, err },
+            'secondary gallery still failed; scene renders with the stills that stored',
+          );
+          continue;
+        }
+        const donor = await this.reuseSimilarBackground(projectId, scene);
+        if (!donor) throw err; // no stand-in yet -> retry
+        // The borrowed stand-in is a video clip; render this scene as video.
+        await this.ctx.repos.scenes.setVisualType(sceneId, SceneVisualType.VIDEO);
+        this.ctx.logger.warn(
+          { projectId, sceneId, donorSceneId: donor.sceneId, via: donor.via, err },
+          `first gallery still unavailable; borrowed ${donor.via} scene video and flipped scene to VIDEO`,
+        );
+        return;
+      }
+    }
+    if (stored === 0) {
+      throw new ValidationError('No gallery still could be stored', { projectId, sceneId });
     }
   }
 

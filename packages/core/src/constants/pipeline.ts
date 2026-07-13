@@ -127,6 +127,51 @@ export function overlayTreatmentForScene(
 const IMAGE_EVERY_NTH_SCENE = 3;
 
 /**
+ * A scene's ON-SCREEN span can far exceed its narration when a long WORDLESS gap
+ * (e.g. a music-only stretch) follows it — the scene is held until the next one
+ * starts. A held IMAGE scene used to show ONE still for the whole span, and a
+ * held VIDEO scene stretched motion clips over a static beat (jewelry/anatomy
+ * read badly in motion — client feedback). Instead, any scene held at least this
+ * long renders as a ROTATING GALLERY of distinct full-frame stills (Ken Burns +
+ * crossfade), regardless of its assigned visual type.
+ */
+export const LONG_HOLD_SEC = 30;
+
+/**
+ * Gallery cadence: roughly one fresh still every this many seconds of on-screen
+ * time (client direction: ~5 images per held minute). A 60s hold → ~5 stills.
+ */
+export const IMAGE_SLOT_SEC = 12;
+
+/** Upper bound on stills per scene, to cap generation cost / rate-limit pressure. */
+export const IMAGE_MAX_PER_SCENE = 8;
+
+/**
+ * How many distinct full-frame stills a scene displayed for `displaySec` should
+ * rotate through, so each is on screen ~IMAGE_SLOT_SEC. Clamped to
+ * [1, IMAGE_MAX_PER_SCENE]. Shared by generation (how many to make) and render
+ * (how many to rotate) — but render adapts to however many actually stored.
+ */
+export function imageCountForDuration(displaySec: number): number {
+  const n = Math.round(displaySec / IMAGE_SLOT_SEC);
+  return Math.max(1, Math.min(IMAGE_MAX_PER_SCENE, n));
+}
+
+/**
+ * Whether a scene should render as a rotating gallery of full-frame stills (vs a
+ * video-clip scene): true for an IMAGE scene, OR any scene held at least
+ * `LONG_HOLD_SEC` on screen. This is the SINGLE span-based decision — made once
+ * at generation time (which then creates image assets); download and render
+ * simply follow whichever assets exist, so they can never disagree with it.
+ */
+export function sceneRendersAsGallery(
+  visualType: SceneVisualType,
+  displaySpanSec: number,
+): boolean {
+  return visualType === SceneVisualType.IMAGE || displaySpanSec >= LONG_HOLD_SEC;
+}
+
+/**
  * Whether a scene is a full-frame IMAGE scene (vs a full-frame VIDEO scene).
  * Retains the old name so existing call sites read naturally; there is no longer
  * an overlay "window" — an IMAGE scene IS the image, full-screen.
@@ -195,6 +240,13 @@ export const TRANSITION = {
    * than freezing a clone-padded tail — see buildBackgroundFill in @yulia/ffmpeg.
    */
   maxSlowFactor: 1.2,
+  /**
+   * Smooth ENDING: the finished film fades the picture to black and fades the
+   * audio out over this many seconds instead of cutting hard on the last frame
+   * (client: "end smoothly, not suddenly"). Clamped to ≤ half the total length
+   * for pathologically short videos.
+   */
+  outroFadeSec: 1.2,
 } as const;
 
 /**

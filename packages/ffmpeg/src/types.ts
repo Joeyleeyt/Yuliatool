@@ -1,20 +1,22 @@
 /**
- * One timeline scene. Videos and images are now SEPARATE full-frame scenes (no
+ * One timeline scene. Videos and images are SEPARATE full-frame scenes (no
  * picture-in-picture): a scene is EITHER a video scene (`backgroundPaths`) OR a
- * full-frame image scene (`imagePath`) — exactly one is set.
+ * full-frame image GALLERY (`imagePaths`) — exactly one is set.
  */
 export interface RenderSegment {
   /**
    * VIDEO scene: local paths to the wide 16:9 clips, in sequence order, played
-   * back-to-back (short crossfade) at normal speed to fill the scene. Empty for
+   * back-to-back (short crossfade) at normal speed to fill the scene. Absent for
    * an image scene.
    */
-  backgroundPaths: string[];
+  backgroundPaths?: string[];
   /**
-   * IMAGE scene: local path to the single full-frame 16:9 still, rendered with a
-   * slow Ken Burns move to fill the whole screen. Undefined for a video scene.
+   * IMAGE GALLERY scene: local paths to the full-frame 16:9 stills, in slot
+   * order. One still → a single Ken Burns hold; several → the stills rotate
+   * (Ken Burns each + crossfade) across the whole on-screen span. Absent for a
+   * video scene.
    */
-  imagePath?: string;
+  imagePaths?: string[];
   /** On-screen duration this segment must occupy for audio sync. */
   displayDurationSec: number;
 }

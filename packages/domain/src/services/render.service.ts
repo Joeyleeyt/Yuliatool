@@ -6,7 +6,6 @@ import { pipeline } from 'node:stream/promises';
 import {
   AssetKind,
   ProjectStatus,
-  sceneIsFullFrameImage,
   mapLimit,
   NotFoundError,
   ValidationError,
@@ -23,6 +22,12 @@ import { ProjectService } from './project.service.js';
 const SCRATCH_ROOT = process.env.SCRATCH_DIR ?? join(tmpdir(), 'yulia-render');
 /** Never let a crossfade exceed a segment; floor the on-screen duration. */
 const MIN_SEGMENT_SEC = 0.7;
+
+/** A gallery still's rotation slot, persisted in the asset's metadata. */
+function slotOf(asset: { metadata: Json }): number {
+  const m = asset.metadata as { slot?: number } | null;
+  return typeof m?.slot === 'number' ? m.slot : 0;
+}
 
 /**
  * RENDERING stage. Downloads every stored asset + the voiceover to a scratch
@@ -222,18 +227,20 @@ export class RenderService {
       const displayEnd = next ? next.start_sec : audioDurationSec;
       const displayDurationSec = Math.max(MIN_SEGMENT_SEC, displayEnd - scene.start_sec);
 
-      // Videos and images are SEPARATE full-frame scenes. Download the ONE kind
-      // this scene has and build the matching segment.
+      // Follow whichever assets exist (generation's span-based decision is the
+      // single source of truth): a scene with stored STILLS renders as a gallery
+      // (one still → a Ken Burns hold; several → rotating stills), otherwise it's
+      // a video scene. This also covers a VIDEO scene held past a long wordless
+      // gap, which generation produced as gallery stills.
       let segment: RenderSegment;
-      if (sceneIsFullFrameImage(scene.visual_type)) {
-        // IMAGE scene: one full-frame still (slot 0), rendered full-screen.
-        const image = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE)).find(
-          (a) => a.status === 'stored' && a.r2_key,
-        );
-        if (!image?.r2_key) throw new ValidationError('Scene image missing', { sceneId: scene.id });
-        const imagePath = join(workDir, `img_${pad}`);
-        await this.download(image.r2_key, imagePath);
-        segment = { backgroundPaths: [], imagePath, displayDurationSec };
+      const storedImages = (await this.ctx.repos.assets.listSceneImages(scene.id, AssetKind.IMAGE))
+        .filter((a) => a.status === 'stored' && a.r2_key)
+        .sort((a, b) => slotOf(a) - slotOf(b));
+      if (storedImages.length > 0) {
+        // GALLERY scene: download every stored still, in slot order.
+        const imagePaths = storedImages.map((_, slot) => join(workDir, `img_${pad}_${slot}`));
+        await Promise.all(storedImages.map((img, slot) => this.download(img.r2_key!, imagePaths[slot]!)));
+        segment = { imagePaths, displayDurationSec };
       } else {
         // VIDEO scene: one or more ~8s clips played back-to-back at full frame.
         const backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(

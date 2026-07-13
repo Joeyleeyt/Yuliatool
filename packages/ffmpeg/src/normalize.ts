@@ -295,6 +295,82 @@ export async function compositeFullFrameImage(
 }
 
 /**
+ * Full-frame IMAGE GALLERY scene: rotate through several distinct stills across
+ * the scene's on-screen span instead of holding ONE still (or stretching a video
+ * clip) for a long wordless stretch — client direction: ~5 fresh images per held
+ * minute, no motion clip. Each still becomes a Ken Burns mini-clip (camera move
+ * cycled so the gallery doesn't feel uniform), the clips crossfade-chain to
+ * EXACTLY `o.durationSec`, and the whole strip is graded to match the video
+ * scenes. One still short-circuits to the single Ken Burns hold (no regression).
+ */
+export async function compositeImageGallery(
+  imagePaths: string[],
+  output: string,
+  o: NormalizeOpts,
+): Promise<void> {
+  if (imagePaths.length <= 1) {
+    await compositeFullFrameImage(imagePaths[0]!, output, o);
+    return;
+  }
+
+  const pix = RENDER_ENCODING.pixelFormat;
+  const n = imagePaths.length;
+  // Internal crossfade between consecutive stills — kept well under each still's
+  // slot so a short slot can't collapse into an all-fade blur.
+  const Tg = Math.min(TRANSITION.durationSec, o.durationSec / (n * 2));
+  // Each still holds `slotLen`, overlapping the next by Tg, so the chain totals
+  // n·slotLen − (n−1)·Tg = o.durationSec exactly (matches the segment length the
+  // concat stage expects, so audio sync is unaffected).
+  const slotLen = (o.durationSec + (n - 1) * Tg) / n;
+  const partOpts: NormalizeOpts = { ...o, durationSec: slotLen };
+
+  // Cycle the camera move so consecutive stills don't share one motion.
+  const motions = [
+    OverlayMotion.SLOW_ZOOM_IN,
+    OverlayMotion.SLOW_ZOOM_OUT,
+    OverlayMotion.PAN_RIGHT,
+    OverlayMotion.PAN_LEFT,
+    OverlayMotion.DRIFT_UP,
+    OverlayMotion.DRIFT_DOWN,
+  ];
+  const parts = await Promise.all(
+    imagePaths.map(async (img, i) => {
+      const part = `${output}.g${i}.mp4`;
+      await normalizeImageSegment(img, part, partOpts, motions[i % motions.length]!);
+      return part;
+    }),
+  );
+
+  // Crossfade-chain the Ken Burns clips, then grade the assembled strip. xfade
+  // offset is the running sum of (slotLen − Tg).
+  const inputs = parts.flatMap((p) => ['-i', p]);
+  const chain: string[] = [];
+  let last = '0:v';
+  let offset = 0;
+  for (let k = 1; k < n; k++) {
+    offset += slotLen - Tg;
+    const label = k === n - 1 ? 'gout' : `gx${k}`;
+    chain.push(
+      `[${last}][${k}:v]xfade=transition=fade:duration=${Tg.toFixed(3)}:offset=${offset.toFixed(3)}[${label}]`,
+    );
+    last = label;
+  }
+  const graph = `${chain.join(';')};[gout]${gradeFilter()},setsar=1,format=${pix}[out]`;
+  await runFfmpeg([
+    ...inputs,
+    '-filter_complex',
+    graph,
+    '-map',
+    '[out]',
+    '-t',
+    o.durationSec.toFixed(3),
+    '-an',
+    ...INTERMEDIATE_ENCODE_ARGS,
+    output,
+  ]);
+}
+
+/**
  * Turn a still image into a `durationSec` clip with the editing plan's chosen
  * camera `motion` (defaults to a slow zoom-in — the historical Ken Burns). Pre-
  * scales 1.2x larger than target so zoompan has headroom to zoom/pan/drift
