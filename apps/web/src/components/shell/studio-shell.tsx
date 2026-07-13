@@ -56,9 +56,9 @@ export function StudioShell({
 
       <div className="lg:pl-[264px]">
         <Topbar userEmail={userEmail} onOpenNav={() => setNavOpen(true)} />
-        {/* Centre the column on the viewport (not just the post-sidebar space),
-            clamped so it never slides under the fixed sidebar. */}
-        <main className="relative mx-auto w-full max-w-7xl px-4 py-8 lg:ml-[max(0px,calc((100vw_-_80rem)/2_-_264px))] lg:px-8 lg:py-10">
+        {/* Fill the space beside the sidebar with even gutters; only cap on
+            ultra-wide screens so line lengths stay sane. */}
+        <main className="relative mx-auto w-full max-w-[1800px] px-4 py-8 lg:px-8 lg:py-10">
           {children}
         </main>
       </div>
