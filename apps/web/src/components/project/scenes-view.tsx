@@ -15,8 +15,8 @@ export function ScenesView({ id }: { id: string }) {
 
   if (isLoading)
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
           <div key={i} className="overflow-hidden rounded-[18px] border border-line/8 bg-surface-1">
             <Skeleton className="aspect-video w-full rounded-none" />
             <div className="flex items-center justify-between gap-2 p-4">
@@ -41,7 +41,7 @@ export function ScenesView({ id }: { id: string }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {scenes.map((scene) => (
           <SceneCard key={scene.id} scene={scene} onOpen={setSelected} />
         ))}

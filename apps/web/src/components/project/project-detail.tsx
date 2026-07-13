@@ -7,7 +7,6 @@ import { useProject, useDeleteProject, useRetryProject } from '@/lib/query/hooks
 import { StatusBadge } from '@/components/status-badge';
 import { UploadZone } from '@/components/upload/upload-zone';
 import { PipelineFlow } from '@/components/pipeline/pipeline-flow';
-import { CostSummary } from '@/components/pipeline/cost-summary';
 import { ScenesView } from './scenes-view';
 import { TranscriptView } from './transcript-view';
 import { AssetsView } from './assets-view';
@@ -93,14 +92,9 @@ export function ProjectDetail({ id }: { id: string }) {
           <UploadZone projectId={id} />
         </FadeUp>
       ) : (
-        <FadeUp delay={0.05} className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <div className="flex flex-col gap-6">
-            {completed && <VideoPlayer id={id} title={project.title} />}
-            <PipelineFlow id={id} />
-          </div>
-          <aside className="flex flex-col gap-6">
-            <CostSummary id={id} />
-          </aside>
+        <FadeUp delay={0.05} className="flex flex-col gap-6">
+          {completed && <VideoPlayer id={id} title={project.title} />}
+          <PipelineFlow id={id} />
         </FadeUp>
       )}
 

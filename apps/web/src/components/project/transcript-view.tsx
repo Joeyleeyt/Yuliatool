@@ -32,20 +32,22 @@ export function TranscriptView({ id }: { id: string }) {
             {formatSeconds(t.duration_sec)}
           </span>
         </div>
-        {paragraphs.length > 0 ? (
-          <div className="flex flex-col gap-4">
-            {paragraphs.map((p, i) => (
-              <div key={i} className="flex gap-4">
-                <span className="w-12 shrink-0 pt-0.5 font-mono text-xs text-fg-subtle">
-                  {formatSeconds(p.start)}
-                </span>
-                <p className="text-sm leading-relaxed text-fg">{p.text}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.full_text}</p>
-        )}
+        <div className="-mr-2 max-h-[560px] overflow-y-auto pr-2">
+          {paragraphs.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {paragraphs.map((p, i) => (
+                <div key={i} className="flex gap-4">
+                  <span className="w-12 shrink-0 pt-0.5 font-mono text-xs text-fg-subtle">
+                    {formatSeconds(p.start)}
+                  </span>
+                  <p className="text-sm leading-relaxed text-fg">{p.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.full_text}</p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

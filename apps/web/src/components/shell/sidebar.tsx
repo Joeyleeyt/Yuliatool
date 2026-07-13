@@ -27,31 +27,6 @@ export function SidebarBody({ onNavigate }: { onNavigate?: (() => void) | undefi
         </p>
         <SidebarNav onNavigate={onNavigate} />
       </div>
-
-      <UsagePill />
-    </div>
-  );
-}
-
-/** A calm at-a-glance credits meter pinned to the sidebar foot. */
-function UsagePill() {
-  const used = 3;
-  const total = 10;
-  const pct = Math.round((used / total) * 100);
-  return (
-    <div className="rounded-xl border border-line/8 bg-surface-1 p-3.5 ring-hairline">
-      <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="text-fg-muted">Render credits</span>
-        <span className="font-mono text-fg-subtle">
-          {used}/{total}
-        </span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-accent-soft to-accent"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   );
 }

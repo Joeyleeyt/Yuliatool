@@ -1,6 +1,15 @@
 'use client';
 
-import { ExternalLink, Film, Image as ImageIcon, AudioLines, File, type LucideIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  ExternalLink,
+  Film,
+  Image as ImageIcon,
+  AudioLines,
+  File,
+  type LucideIcon,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useAssets } from '@/lib/query/hooks';
 import type { AssetView } from '@/lib/api/types';
 import { formatBytes, formatSeconds } from '@/lib/utils';
@@ -29,6 +38,15 @@ const KIND_LABEL: Record<string, string> = {
   thumbnail: 'Thumbnail',
   voiceover: 'Voiceover',
   temp: 'Temp',
+};
+
+const KIND_ICON: Record<string, LucideIcon> = {
+  video_clip: Film,
+  render: Film,
+  image: ImageIcon,
+  thumbnail: ImageIcon,
+  voiceover: AudioLines,
+  temp: File,
 };
 
 const MEDIA_GROUPS: { key: string; label: string; icon: LucideIcon; kinds: Set<string> }[] = [
@@ -60,8 +78,22 @@ function groupKeyFor(kind: string): string {
 // --- view -------------------------------------------------------------------
 export function AssetsView({ id }: { id: string }) {
   const { data, isLoading } = useAssets(id);
-  if (isLoading) return <Skeleton className="h-52 w-full rounded-2xl" />;
   const assets = data?.assets ?? [];
+
+  const groups = useMemo(
+    () =>
+      MEDIA_GROUPS.map((g) => ({
+        ...g,
+        items: assets.filter((a) => groupKeyFor(a.kind) === g.key),
+      })).filter((g) => g.items.length > 0),
+    [assets],
+  );
+
+  const [active, setActive] = useState<string | null>(null);
+  const activeKey = active ?? groups[0]?.key ?? null;
+  const activeGroup = groups.find((g) => g.key === activeKey);
+
+  if (isLoading) return <Skeleton className="h-52 w-full rounded-2xl" />;
 
   if (assets.length === 0)
     return (
@@ -74,97 +106,105 @@ export function AssetsView({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {MEDIA_GROUPS.map((group) => {
-        const groupAssets = assets.filter((a) => groupKeyFor(a.kind) === group.key);
-        if (groupAssets.length === 0) return null;
-        return <MediaGroup key={group.key} label={group.label} icon={group.icon} assets={groupAssets} />;
-      })}
-    </div>
-  );
-}
-
-function MediaGroup({
-  label,
-  icon: Icon,
-  assets,
-}: {
-  label: string;
-  icon: LucideIcon;
-  assets: AssetView[];
-}) {
-  // Bucket by status, preserving the lifecycle order.
-  const byStatus = STATUS_ORDER.map((status) => ({
-    status,
-    items: assets.filter((a) => a.status === status),
-  })).filter((b) => b.items.length > 0);
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-line/8 bg-surface-1 shadow-soft ring-hairline">
-      {/* Group header: media type + count + status tally */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-line/8 p-4">
-        <IconTile size="sm">
-          <Icon className="h-4 w-4" />
-        </IconTile>
-        <div>
-          <p className="text-sm font-medium tracking-tight text-fg">{label}</p>
-          <p className="text-xs text-fg-subtle">
-            {assets.length} {assets.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          {byStatus.map(({ status, items }) => {
-            const tone = STATUS_META[status]?.tone ?? 'neutral';
-            return (
-              <span
-                key={status}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line/8 bg-surface-2/60 px-2 py-0.5 text-[11px] text-fg-muted"
-              >
-                <span className={cn('h-1.5 w-1.5 rounded-full', dotClass[tone])} />
-                {items.length} {STATUS_META[status]?.label ?? status}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Status sub-groups */}
-      <div className="divide-y divide-line/8">
-        {byStatus.map(({ status, items }) => {
-          const meta = STATUS_META[status] ?? { label: status, tone: 'neutral' as Tone };
+      {/* Media tabs */}
+      <div className="inline-flex w-fit items-center gap-1 rounded-xl border border-line/8 bg-surface-1 p-1 ring-hairline">
+        {groups.map((g) => {
+          const isActive = g.key === activeKey;
+          const Icon = g.icon;
           return (
-            <div key={status}>
-              <div className="flex items-center gap-2 bg-surface-2/40 px-4 py-2">
-                <span className={cn('h-1.5 w-1.5 rounded-full', dotClass[meta.tone])} />
-                <span className={cn('text-xs font-medium', textClass[meta.tone])}>{meta.label}</span>
-                <span className="font-mono text-[11px] text-fg-subtle">{items.length}</span>
-              </div>
-              {items.map((a) => (
-                <AssetRow key={a.id} asset={a} />
-              ))}
-            </div>
+            <button
+              key={g.key}
+              onClick={() => setActive(g.key)}
+              className={cn(
+                'relative rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors',
+                isActive ? 'text-fg' : 'text-fg-muted hover:text-fg',
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="asset-media-tab"
+                  className="absolute inset-0 rounded-lg bg-surface-3 ring-1 ring-inset ring-line/10"
+                  transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                <Icon className={cn('h-4 w-4', isActive && 'text-accent')} />
+                {g.label}
+                <span className="rounded-full bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle">
+                  {g.items.length}
+                </span>
+              </span>
+            </button>
           );
         })}
       </div>
+
+      {/* Active tab body — fixed height, scrolls when it overflows */}
+      <div className="-mr-2 max-h-[560px] overflow-y-auto pr-2">
+        {activeGroup && <MediaGroupBody key={activeGroup.key} items={activeGroup.items} />}
+      </div>
     </div>
   );
 }
 
-function AssetRow({ asset: a }: { asset: AssetView }) {
-  const dims = a.width && a.height ? `${a.width}×${a.height}` : null;
+function MediaGroupBody({ items }: { items: AssetView[] }) {
+  const byStatus = STATUS_ORDER.map((status) => ({
+    status,
+    items: items.filter((a) => a.status === status),
+  })).filter((b) => b.items.length > 0);
+
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-2/40">
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      className="flex flex-col gap-6"
+    >
+      {byStatus.map(({ status, items: statusItems }) => {
+        const meta = STATUS_META[status] ?? { label: status, tone: 'neutral' as Tone };
+        return (
+          <div key={status}>
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className={cn('h-1.5 w-1.5 rounded-full', dotClass[meta.tone])} />
+              <span className={cn('text-xs font-medium', textClass[meta.tone])}>{meta.label}</span>
+              <span className="font-mono text-[11px] text-fg-subtle">{statusItems.length}</span>
+            </div>
+            {/* two columns */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {statusItems.map((a) => (
+                <AssetCard key={a.id} asset={a} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </motion.div>
+  );
+}
+
+function AssetCard({ asset: a }: { asset: AssetView }) {
+  const Icon = KIND_ICON[a.kind] ?? File;
+  const dims = a.width && a.height ? `${a.width}×${a.height}` : null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-line/8 bg-surface-1 p-3.5 shadow-soft ring-hairline transition-colors hover:border-line/16">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="truncate font-medium text-fg-muted">{KIND_LABEL[a.kind] ?? a.kind}</span>
-        {dims && <span className="shrink-0 font-mono text-[11px] text-fg-subtle">{dims}</span>}
-        {a.provider && (
-          <span className="hidden shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle sm:inline">
-            {a.provider}
-          </span>
-        )}
+        <IconTile size="sm">
+          <Icon className="h-4 w-4" />
+        </IconTile>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-fg">{KIND_LABEL[a.kind] ?? a.kind}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-fg-subtle">
+            {[dims, a.provider].filter(Boolean).join(' · ') || '—'}
+          </p>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-4 font-mono text-xs text-fg-subtle">
-        {a.size_bytes ? <span>{formatBytes(a.size_bytes)}</span> : null}
-        {a.duration_sec ? <span>{formatSeconds(a.duration_sec)}</span> : null}
+
+      <div className="flex shrink-0 flex-col items-end gap-1 font-mono text-[11px] text-fg-subtle">
+        <div className="flex items-center gap-3">
+          {a.size_bytes ? <span>{formatBytes(a.size_bytes)}</span> : null}
+          {a.duration_sec ? <span>{formatSeconds(a.duration_sec)}</span> : null}
+        </div>
         {a.url ? (
           <a
             href={a.url}
