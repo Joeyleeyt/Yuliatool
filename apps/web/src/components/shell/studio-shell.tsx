@@ -56,7 +56,11 @@ export function StudioShell({
 
       <div className="lg:pl-[264px]">
         <Topbar userEmail={userEmail} onOpenNav={() => setNavOpen(true)} />
-        <main className="relative mx-auto w-full max-w-6xl px-4 py-8 lg:px-8 lg:py-10">{children}</main>
+        {/* Centre the column on the viewport (not just the post-sidebar space),
+            clamped so it never slides under the fixed sidebar. */}
+        <main className="relative mx-auto w-full max-w-6xl px-4 py-8 lg:ml-[max(0px,calc((100vw_-_72rem)/2_-_264px))] lg:px-8 lg:py-10">
+          {children}
+        </main>
       </div>
     </div>
   );
