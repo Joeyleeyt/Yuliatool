@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, PlaySquare, Copy, Clapperboard } from 'lucide-react';
+import { Download, Clapperboard } from 'lucide-react';
 import { useRender, useCost } from '@/lib/query/hooks';
 import { formatSeconds } from '@/lib/utils';
 import { Button, Progress, Skeleton } from '@/components/ui/primitives';
@@ -67,14 +67,6 @@ export function VideoPlayer({ id, title }: { id: string; title?: string }) {
               </Button>
             </a>
           )}
-          <Button size="sm" variant="outline" disabled title="Coming soon">
-            <PlaySquare className="h-3.5 w-3.5" />
-            Publish
-          </Button>
-          <Button size="sm" variant="ghost" disabled title="Coming soon">
-            <Copy className="h-3.5 w-3.5" />
-            Duplicate
-          </Button>
         </div>
       </div>
     </div>

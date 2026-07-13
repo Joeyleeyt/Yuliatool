@@ -39,7 +39,7 @@ export function StageCard({
   return (
     <div
       className={cn(
-        'relative flex min-w-[152px] flex-1 flex-col rounded-2xl border p-4 transition-colors',
+        'relative flex min-w-0 flex-col rounded-2xl border p-4 transition-colors',
         state === 'active' && 'border-accent/30 bg-accent/[0.05] shadow-[0_10px_30px_-14px_rgb(var(--accent)/0.5)]',
         state === 'done' && 'border-success/20 bg-success/[0.03]',
         state === 'pending' && 'border-line/8 bg-surface-1/50',

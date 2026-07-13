@@ -7,8 +7,6 @@ import {
   Film,
   ImageIcon,
   Copy,
-  RotateCw,
-  PencilLine,
   Clapperboard,
   type LucideIcon,
 } from 'lucide-react';
@@ -235,14 +233,6 @@ function PromptTab({ scene }: { scene: SceneView }) {
         <Button size="sm" variant="outline" onClick={() => void copy(positive)}>
           <Copy className="h-3.5 w-3.5" />
           Copy
-        </Button>
-        <Button size="sm" variant="ghost" disabled title="Coming soon">
-          <PencilLine className="h-3.5 w-3.5" />
-          Edit
-        </Button>
-        <Button size="sm" variant="ghost" disabled title="Coming soon">
-          <RotateCw className="h-3.5 w-3.5" />
-          Regenerate
         </Button>
       </div>
     </div>

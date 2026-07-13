@@ -18,8 +18,8 @@ export function ProjectGrid({
 }) {
   if (isLoading) {
     return (
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
           <div key={i} className="overflow-hidden rounded-2xl border border-line/8 bg-surface-1">
             <Skeleton className="aspect-video w-full rounded-none" />
             <div className="flex flex-col gap-2 p-4">
@@ -55,7 +55,7 @@ export function ProjectGrid({
       variants={stagger(0.05)}
       initial="hidden"
       animate="show"
-      className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
     >
       {projects.map((p) => (
         <motion.div key={p.id} variants={fadeUp}>

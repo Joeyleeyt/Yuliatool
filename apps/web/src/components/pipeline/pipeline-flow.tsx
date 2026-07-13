@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, RotateCw, AlertCircle } from 'lucide-react';
+import { RotateCw, AlertCircle } from 'lucide-react';
 import { useProjectStatus, useRetryProject } from '@/lib/query/hooks';
 import { PIPELINE_STAGES, stageIndexForStatus } from './stages';
 import type { NodeState } from './pipeline-node';
@@ -146,21 +146,17 @@ export function PipelineFlow({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Horizontal stage timeline */}
-      <div className="relative flex items-stretch gap-2 overflow-x-auto pb-1">
+      {/* Stage timeline — fits the width, wraps on narrower screens (no scroll) */}
+      <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         {PIPELINE_STAGES.map((stage, i) => (
-          <div key={stage.key} className="flex items-center gap-2">
-            <StageCard
-              stage={stage}
-              state={nodeState(i)}
-              pct={stagePct(i)}
-              metric={stageMetric(i)}
-              eta={nodeState(i) === 'active' ? eta : undefined}
-            />
-            {i < PIPELINE_STAGES.length - 1 && (
-              <ChevronRight className="h-4 w-4 shrink-0 text-fg-subtle/50" />
-            )}
-          </div>
+          <StageCard
+            key={stage.key}
+            stage={stage}
+            state={nodeState(i)}
+            pct={stagePct(i)}
+            metric={stageMetric(i)}
+            eta={nodeState(i) === 'active' ? eta : undefined}
+          />
         ))}
       </div>
     </div>
