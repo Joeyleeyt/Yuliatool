@@ -145,6 +145,11 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `a professional actress: the action begins, completes, and then she SETTLES into a relaxed, ` +
     `natural posture — not an endless repeating gesture. Never reduce her to "standing", "posing", ` +
     `or "wearing a dress" — she is always DOING something, but only ONE thing.\n` +
+    `   BED SCENES — if the beat is on or beside a bed, she is LYING DOWN (reclining on the ` +
+    `bedding), NEVER standing on the bed. Her natural action there is to gently EMBRACE the bed — ` +
+    `wrapping her arms around a pillow or the duvet, hugging the soft linens close while she rests ` +
+    `— rather than a fingertip "touch" of the fabric. Keep it a calm full-arm embrace that settles, ` +
+    `so it reads as restful and cannot devolve into fiddly hand-touch tics.\n` +
     `   PERFORMANCE — every movement has intention; NO meaningless idle filler. Hands stay relaxed ` +
     `unless interacting with an object. FORBID the tell-tale AI-idle tics: finger wringing, rubbing ` +
     `fingertips, repetitive hand rubbing, wrist twisting, neck wringing or exaggerated neck ` +
@@ -159,7 +164,8 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `contact → complete the action → relaxed hand. BAD: fingers spread → wrist rotates → fingers ` +
     `wiggle → hand twists → touch.\n` +
     `   MOTION REALISM (critical — the video model breaks physics on big movement): keep the action ` +
-    `GROUNDED and local — feet planted, hands within a natural reach, the ambient camera + light + ` +
+    `GROUNDED and local — body settled and supported (feet planted when standing/seated, or reclined ` +
+    `on the bedding when lying down), hands within a natural reach, the ambient camera + light + ` +
     `steam + a light fabric settle carrying most of the motion. NEVER describe her walking across ` +
     `the room, walking toward the bed, strolling, traversing or moving through the space, or any ` +
     `full-body locomotion — the model renders that as clipping through furniture and floating feet. ` +
@@ -257,7 +263,9 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `mannequin). If a woman is present she is the primary subject: a real living adult, breathing, ` +
     `blinking, with subtle continuous movement, performing ONE grounded narration-connected ritual ` +
     `(pouring tea, arranging peonies, reading, touching silk, lighting a candle) — never merely ` +
-    `standing or posing, never a frozen still. Keep her action LOCAL and grounded (feet planted, ` +
+    `standing or posing, never a frozen still. On or beside a BED she is LYING DOWN and gently ` +
+    `hugging a pillow or the duvet with both arms (never standing on the bed, never a fingertip ` +
+    `touch). Keep her action LOCAL and grounded (settled/reclined, not walking; ` +
     `natural reach); carry the rest of the motion with ambient camera, light, steam, a light ` +
     `fabric settle — do NOT write that she walks, strolls, moves through, or crosses the room.\n\n` +
     `SET THE ENVIRONMENT from THIS narration's meaning (not a default bedroom/living-room): put the ` +
