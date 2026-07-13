@@ -114,18 +114,31 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
     `keep at most ONE person's hands in any close shot. Prefer showing the product with NO hands ` +
     `at all when hands aren't essential.\n\n` +
-    `1) BACKGROUND — a wide, 16:9, ~8-second cinematic lifestyle/establishing VIDEO clip with ` +
-    `gentle, PHYSICALLY GROUNDED motion (slow dolly, push-in, subtle parallax, softly drifting ` +
-    `light). Keep motion restrained and realistic — avoid fabric or objects that float, morph, ` +
-    `or move in physically impossible ways; any fabric motion must be a light, natural settle.\n` +
-    `   MOTION REALISM (critical — the video model breaks physics on big movement): the primary ` +
-    `motion should be AMBIENT — the camera and light move, not the subject. If a person is in ` +
-    `frame, keep them in a STABLE pose or ONE small grounded micro-action (sipping, turning a ` +
-    `page, adjusting a cuff, holding an object) with feet planted, and restate the anatomy count ` +
-    `(one person, two hands). NEVER describe a person walking across a room, walking toward the ` +
-    `bed, traversing the space, or any full-body locomotion — the model renders that as clipping ` +
-    `through furniture and floating feet. Prefer describing the ROOM and the LIGHT over the ` +
-    `person's movement.\n` +
+    `1) BACKGROUND — a wide, 16:9, ~8-second PHOTOREALISTIC LIVE-ACTION VIDEO clip that looks ` +
+    `filmed on a professional cinema camera for a luxury fashion / premium hotel commercial (Dior, ` +
+    `Chanel, Aman, Apple, a Netflix lifestyle documentary) — NOT AI artwork, illustration, a ` +
+    `catalog still, or a mannequin/dress-form shot. State the live-action realism explicitly: real ` +
+    `cinema camera, natural skin texture, realistic eyes and hands, natural body proportions, real ` +
+    `lens characteristics, natural depth of field, film-quality color grade.\n` +
+    `   THE PERSON IS A REAL, LIVING HUMAN and the PRIMARY SUBJECT (the environment supports her, ` +
+    `never upstages her). She is a fully-formed adult woman, alive, naturally proportioned, ` +
+    `breathing, blinking, with subtle continuous life (soft head/eye movement, shifting weight, ` +
+    `gentle hand and hair movement) — never a frozen pose, a still photograph, a faceless/headless ` +
+    `body, floating clothes, or a fashion mannequin. Restate the anatomy count in the prompt ` +
+    `(exactly one woman, two hands, five fingers each, anatomically correct).\n` +
+    `   ACTION — give her ONE meaningful, grounded action that connects to the narration, chosen ` +
+    `from the kind of quiet luxury rituals this channel lives in: pouring tea or coffee, arranging ` +
+    `white peonies in a vase, reading or writing in a journal, touching or folding silk/linen, ` +
+    `lighting a candle, holding a cup, adjusting a cuff or sleeve, opening curtains at the window. ` +
+    `Never reduce her to "standing", "posing", or "wearing a dress" — she is always DOING ` +
+    `something.\n` +
+    `   MOTION REALISM (critical — the video model breaks physics on big movement): keep the action ` +
+    `GROUNDED and local — feet planted, hands within a natural reach, the ambient camera + light + ` +
+    `steam + a light fabric settle carrying most of the motion. NEVER describe her walking across ` +
+    `the room, walking toward the bed, strolling, traversing or moving through the space, or any ` +
+    `full-body locomotion — the model renders that as clipping through furniture and floating feet. ` +
+    `Avoid fabric or objects that float, morph, or move in physically impossible ways; any fabric ` +
+    `motion is a light, natural settle.\n` +
     `2) OVERLAY — a 4:5 portrait still IMAGE that is a CLEAN, ISOLATED PRODUCT SHOT: the single ` +
     `hero object by itself on a simple luxury surface (silk, marble, velvet, linen) with negative ` +
     `space, editorial studio lighting. By default show NO hands and NO person in the overlay — a ` +
@@ -213,9 +226,14 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `anatomically correct". Also provide overlayPrompt2: a SECOND, DIFFERENT clean product angle ` +
     `or detail of the same object (still bare, no hands, not a repeat) that the window rotates to ` +
     `on longer scenes — set it to null if this scene only needs one overlay.\n\n` +
-    `Also, in the BACKGROUND positivePrompt and motion fields: describe ambient motion (camera, ` +
-    `light, steam, a light fabric settle) and keep any person in a stable, grounded pose — do NOT ` +
-    `write that she walks, strolls, moves through, or crosses the room.\n\n` +
+    `Also, the BACKGROUND positivePrompt must read as PHOTOREALISTIC LIVE-ACTION footage on a real ` +
+    `cinema camera (luxury commercial / Netflix-doc look — not AI art, a catalog still, or a ` +
+    `mannequin). If a woman is present she is the primary subject: a real living adult, breathing, ` +
+    `blinking, with subtle continuous movement, performing ONE grounded narration-connected ritual ` +
+    `(pouring tea, arranging peonies, reading, touching silk, lighting a candle) — never merely ` +
+    `standing or posing, never a frozen still. Keep her action LOCAL and grounded (feet planted, ` +
+    `natural reach); carry the rest of the motion with ambient camera, light, steam, a light ` +
+    `fabric settle — do NOT write that she walks, strolls, moves through, or crosses the room.\n\n` +
     `Finally, the OVERLAY EDITING PLAN — choose these deliberately for THIS beat (not by rote):\n` +
     `- overlayPosition: left, center, or right (center only when the overlay should replace the ` +
     `background as a full mood/lifestyle moment; otherwise the side that best preserves the focal ` +
