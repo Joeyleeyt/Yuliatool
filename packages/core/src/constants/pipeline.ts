@@ -95,56 +95,48 @@ export function backgroundClipCountForDuration(displaySec: number): number {
 // (GENERATION_POLL_INTERVAL_SEC) so it's tunable per-deploy without a rebuild.
 
 /**
- * Visual treatment per scene. Videos and images are now SEPARATE full-frame
- * scenes (client direction) — the old picture-in-picture composite (a video
- * background with a product-image window floated over it) is retired:
+ * Videos and images are SEPARATE full-frame scenes (client direction):
  *   - VIDEO  = a full-frame video scene (69Labs video clip[s], full canvas).
- *   - IMAGE  = a full-frame IMAGE scene (one 69Labs image, filling the screen,
- *              rendered with a slow Ken Burns move). No video clip, no overlay.
+ *   - IMAGE  = a full-frame IMAGE scene (one/several 69Labs stills, Ken Burns).
  *
- * Mix target ~70% video / 30% image: roughly every third scene is an image, the
- * rest video. First/last are always video (stronger opening/closing motion).
- * Deterministic by index so generation + render always agree. Fewer videos is
- * also the point — it cuts the 69Labs asset count (generation time).
+ * Placement is now CONTENT-AWARE (client feedback: "images don't follow the
+ * voiceover"): a scene becomes an IMAGE only when its narration NAMES something
+ * showable (a product / object / tactile detail — `narrationHasProductBeat`), so
+ * the still on screen matches what's being said. Spacing keeps the edit MIXED —
+ * images are separated by at least `MIN_IMAGE_GAP_SCENES` video scenes, so
+ * there's never a run of images and motion carries the narrative between them.
+ * First/last are always video (stronger open/close). Beats that name nothing
+ * showable stay video, so images only appear when they have something to depict.
  */
-export function overlayTreatmentForScene(
-  index: number,
-  total: number,
-  _narration: string,
-): SceneVisualType {
-  const isFirst = index === 0;
-  const isLast = index === total - 1;
-  if (isFirst || isLast) return SceneVisualType.VIDEO;
-  // ~30% images: every IMAGE_EVERY_NTH_SCENE-th middle scene is a full-frame
-  // image, the rest are full-frame video (~70%).
-  return index % IMAGE_EVERY_NTH_SCENE === 0 ? SceneVisualType.IMAGE : SceneVisualType.VIDEO;
+const MIN_IMAGE_GAP_SCENES = 2;
+
+export function assignVisualTypes(narrations: readonly string[]): SceneVisualType[] {
+  const n = narrations.length;
+  const types: SceneVisualType[] = new Array(n).fill(SceneVisualType.VIDEO);
+  let lastImage = -Infinity;
+  for (let i = 0; i < n; i++) {
+    if (i === 0 || i === n - 1) continue; // open/close stay video
+    if (narrationHasProductBeat(narrations[i]!) && i - lastImage > MIN_IMAGE_GAP_SCENES) {
+      types[i] = SceneVisualType.IMAGE;
+      lastImage = i;
+    }
+  }
+  return types;
 }
 
 /**
- * Cadence of full-frame IMAGE scenes among the middle scenes. 1-in-3 ≈ 30%
- * images / 70% video, the client's requested split. Higher = fewer images.
- */
-const IMAGE_EVERY_NTH_SCENE = 3;
-
-/**
- * A scene's ON-SCREEN span can far exceed its narration when a long WORDLESS gap
- * (e.g. a music-only stretch) follows it — the scene is held until the next one
- * starts. A held IMAGE scene used to show ONE still for the whole span, and a
- * held VIDEO scene stretched motion clips over a static beat (jewelry/anatomy
- * read badly in motion — client feedback). Instead, any scene held at least this
- * long renders as a ROTATING GALLERY of distinct full-frame stills (Ken Burns +
- * crossfade), regardless of its assigned visual type.
- */
-export const LONG_HOLD_SEC = 30;
-
-/**
  * Gallery cadence: roughly one fresh still every this many seconds of on-screen
- * time (client direction: ~5 images per held minute). A 60s hold → ~5 stills.
+ * time. A held IMAGE scene rotates through several distinct stills instead of
+ * holding one frame. A 60s image hold → ~5 stills.
  */
 export const IMAGE_SLOT_SEC = 12;
 
-/** Upper bound on stills per scene, to cap generation cost / rate-limit pressure. */
-export const IMAGE_MAX_PER_SCENE = 8;
+/**
+ * Upper bound on stills per scene. Capped low (client feedback: "not 10 images in
+ * a row") so a held image scene shows a SHORT rotation, not a wall of stills —
+ * keeps the edit mixed and the images close to the beat's narration.
+ */
+export const IMAGE_MAX_PER_SCENE = 5;
 
 /**
  * How many distinct full-frame stills a scene displayed for `displaySec` should
@@ -158,17 +150,19 @@ export function imageCountForDuration(displaySec: number): number {
 }
 
 /**
- * Whether a scene should render as a rotating gallery of full-frame stills (vs a
- * video-clip scene): true for an IMAGE scene, OR any scene held at least
- * `LONG_HOLD_SEC` on screen. This is the SINGLE span-based decision — made once
- * at generation time (which then creates image assets); download and render
- * simply follow whichever assets exist, so they can never disagree with it.
+ * Whether a scene renders as a rotating gallery of full-frame stills (vs a
+ * video-clip scene): TRUE only for an IMAGE scene. Held VIDEO beats keep their
+ * motion (multi-clip fill) rather than being converted to stills — client
+ * feedback was that too many scenes had become images and the edit needs video
+ * and images MIXED. IMAGE scenes still rotate a short gallery when held.
+ * The single visual decision is made at generation time (which creates the image
+ * assets); download + render then follow whichever assets exist.
  */
 export function sceneRendersAsGallery(
   visualType: SceneVisualType,
-  displaySpanSec: number,
+  _displaySpanSec: number,
 ): boolean {
-  return visualType === SceneVisualType.IMAGE || displaySpanSec >= LONG_HOLD_SEC;
+  return visualType === SceneVisualType.IMAGE;
 }
 
 /**

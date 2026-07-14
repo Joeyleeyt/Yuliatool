@@ -8,7 +8,7 @@ import {
   SegmentationSchema,
   SEGMENT_WINDOW_SEC,
   SEGMENTATION_CHUNK,
-  overlayTreatmentForScene,
+  assignVisualTypes,
   env,
   type SegmentScene,
   type SegmentationOutput,
@@ -246,17 +246,23 @@ function buildScenes(units: TranscriptUnit[], segScenes: SegmentScene[]): NewSce
     spans.push(...splitSpan(units, startIdx, endIdx, seg));
   }
 
-  // Pass 2: materialize each span, assigning visual type over the FINAL list so
-  // first/last (and the every-Nth breather rule) are computed post-split.
+  // Pass 2: materialize each span. Visual type is assigned CONTENT-AWARE over the
+  // FINAL (post-split) list — images land on beats whose narration names a
+  // showable thing, spaced so the edit stays mixed (see assignVisualTypes).
+  const narrations = spans.map((span) =>
+    units
+      .slice(span.startIdx, span.endIdx + 1)
+      .map((u) => u.text)
+      .join(' '),
+  );
+  const visualTypes = assignVisualTypes(narrations);
+
   return spans.map((span, i): NewScene => {
     const startSec = units[span.startIdx]!.start;
     const endSec = units[span.endIdx]!.end;
     const durationSec = Math.max(0.5, Number((endSec - startSec).toFixed(3)));
-    const narration = units
-      .slice(span.startIdx, span.endIdx + 1)
-      .map((u) => u.text)
-      .join(' ');
-    const visualType = overlayTreatmentForScene(i, spans.length, narration);
+    const narration = narrations[i]!;
+    const visualType = visualTypes[i]!;
 
     const visualBrief: Json = {
       visualIntent: span.seg.visualIntent,

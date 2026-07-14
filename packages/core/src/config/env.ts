@@ -122,10 +122,11 @@ const EnvSchema = z.object({
   // override lower for local dev on fewer cores.
   RENDER_COMPOSITE_CONCURRENCY: z.coerce.number().int().positive().default(4),
   // Background-music mix level: how many dB BELOW the voiceover the music sits
-  // (negative = quieter). Default -20 dB is clearly audible but never competes
-  // with speech. Tune after hearing a render without a rebuild. The music file
-  // itself is a fixed R2 object (see MUSIC_KEY); absent -> voiceover-only.
-  MUSIC_DUCK_DB: z.coerce.number().default(-20),
+  // (negative = quieter). Default -28 dB keeps the music a soft, unobtrusive bed
+  // well under the speech (client feedback: "less loud"). Tune with the env var
+  // without a rebuild — e.g. -32 for quieter, -22 for more present. The music
+  // file itself is a fixed R2 object (see MUSIC_KEY); absent -> voiceover-only.
+  MUSIC_DUCK_DB: z.coerce.number().default(-28),
   // Hardware video encoder to use instead of software libx264, IF the worker
   // image + VM actually provide it (NVENC needs an NVIDIA GPU VM + an ffmpeg
   // build with NVENC support; QSV needs Intel Quick Sync). Off ('none') by
