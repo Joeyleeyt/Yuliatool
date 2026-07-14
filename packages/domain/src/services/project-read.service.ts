@@ -7,6 +7,7 @@ import type {
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
+  AnalysisRow,
 } from '@yulia/db';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
@@ -95,6 +96,11 @@ export class ProjectReadService {
   async transcript(projectId: string, ownerId: string): Promise<TranscriptRow | null> {
     await this.projects.get(projectId, ownerId);
     return this.ctx.repos.transcripts.findByProject(projectId);
+  }
+
+  async analysis(projectId: string, ownerId: string): Promise<AnalysisRow | null> {
+    await this.projects.get(projectId, ownerId);
+    return this.ctx.repos.analyses.findByProject(projectId);
   }
 
   async activity(projectId: string, ownerId: string): Promise<ActivityLogRow[]> {

@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Menu, Search } from 'lucide-react';
 import { Brand } from './brand';
+import { CommandPalette } from './command-palette';
 import { SignOutButton } from '@/components/auth/sign-out-button';
 import { Kbd } from '@/components/ui/primitives';
 
@@ -13,6 +15,18 @@ export function Topbar({
   onOpenNav: () => void;
 }) {
   const initial = (userEmail?.[0] ?? 'u').toUpperCase();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <header className="sticky top-0 z-20 border-b border-line/8 glass">
@@ -29,8 +43,11 @@ export function Topbar({
           <Brand />
         </div>
 
-        {/* Desktop: command hint */}
-        <button className="hidden items-center gap-2 rounded-lg border border-line/10 bg-surface-1/60 px-3 py-1.5 text-sm text-fg-subtle transition-colors hover:border-line/20 hover:text-fg-muted lg:flex">
+        {/* Desktop: command palette trigger */}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="hidden items-center gap-2 rounded-lg border border-line/10 bg-surface-1/60 px-3 py-1.5 text-sm text-fg-subtle transition-colors hover:border-line/20 hover:text-fg-muted lg:flex"
+        >
           <Search className="h-3.5 w-3.5" />
           <span>Search projects</span>
           <Kbd>⌘K</Kbd>
@@ -46,6 +63,8 @@ export function Topbar({
           </div>
         </div>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </header>
   );
 }

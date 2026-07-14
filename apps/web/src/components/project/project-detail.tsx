@@ -13,6 +13,8 @@ import { ScenesView } from './scenes-view';
 import { TranscriptView } from './transcript-view';
 import { AssetsView } from './assets-view';
 import { ActivityView } from './activity-view';
+import { AnalysisView } from './analysis-view';
+import { GenerationLogs } from '@/components/activity/generation-logs';
 import { VideoPlayer } from '@/components/video/video-player';
 import { Button, Skeleton } from '@/components/ui/primitives';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -36,6 +38,7 @@ export function ProjectDetail({ id }: { id: string }) {
       void qc.invalidateQueries({ queryKey: ['scenes', id] });
       void qc.invalidateQueries({ queryKey: ['assets', id] });
       void qc.invalidateQueries({ queryKey: ['activity', id] });
+      void qc.invalidateQueries({ queryKey: ['analysis', id] });
     }
   }, [status, id, qc]);
 
@@ -118,11 +121,16 @@ export function ProjectDetail({ id }: { id: string }) {
         <FadeUp delay={0.1}>
           <Tabs defaultValue="scenes">
             <TabsList>
+              <TabsTrigger value="story">Story</TabsTrigger>
               <TabsTrigger value="scenes">Scenes</TabsTrigger>
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="assets">Assets</TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
+            <TabsContent value="story">
+              <AnalysisView id={id} />
+            </TabsContent>
             <TabsContent value="scenes">
               <ScenesView id={id} />
             </TabsContent>
@@ -131,6 +139,9 @@ export function ProjectDetail({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="assets">
               <AssetsView id={id} />
+            </TabsContent>
+            <TabsContent value="logs">
+              <GenerationLogs id={id} />
             </TabsContent>
             <TabsContent value="activity">
               <ActivityView id={id} />

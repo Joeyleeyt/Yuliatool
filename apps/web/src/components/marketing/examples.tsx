@@ -1,13 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Play, Clock } from 'lucide-react';
+import { Play, Clock, Film } from 'lucide-react';
 import { Section } from './section';
 
 const EXAMPLES = [
-  { title: 'Midnight in Monaco', tag: 'Travel · Editorial', duration: '2:14', scenes: 18 },
-  { title: 'The Quiet Fortune', tag: 'Finance · Documentary', duration: '3:41', scenes: 27 },
-  { title: 'Atelier', tag: 'Fashion · Faceless', duration: '1:52', scenes: 15 },
+  { title: 'Midnight in Monaco', tag: 'Travel · Editorial', duration: '2:14', scenes: 18, format: '16:9' },
+  { title: 'The Quiet Fortune', tag: 'Finance · Documentary', duration: '3:41', scenes: 27, format: '16:9' },
+  { title: 'Atelier', tag: 'Fashion · Faceless', duration: '1:52', scenes: 15, format: '9:16' },
 ];
 
 const GRADIENTS = [
@@ -40,6 +40,9 @@ export function Examples() {
                   <Play className="h-5 w-5 translate-x-0.5 text-white" />
                 </div>
               </div>
+              <div className="absolute bottom-3 left-3 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur">
+                {ex.format}
+              </div>
               <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur">
                 <Clock className="h-3 w-3" />
                 {ex.duration}
@@ -50,7 +53,10 @@ export function Examples() {
                 <p className="text-sm font-medium text-fg">{ex.title}</p>
                 <p className="text-xs text-fg-subtle">{ex.tag}</p>
               </div>
-              <span className="font-mono text-xs text-fg-subtle">{ex.scenes} scenes</span>
+              <span className="inline-flex items-center gap-1 font-mono text-xs text-fg-subtle">
+                <Film className="h-3 w-3" />
+                {ex.scenes} scenes
+              </span>
             </div>
           </motion.div>
         ))}

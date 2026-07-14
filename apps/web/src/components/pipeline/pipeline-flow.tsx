@@ -2,8 +2,7 @@
 
 import { RotateCw, AlertCircle } from 'lucide-react';
 import { useProjectStatus, useRetryProject } from '@/lib/query/hooks';
-import { PIPELINE_STAGES, stageIndexForStatus } from './stages';
-import type { NodeState } from './pipeline-node';
+import { PIPELINE_STAGES, stageIndexForStatus, type NodeState } from './stages';
 import { StageCard } from './stage-card';
 import { ProgressIndicator } from './progress-indicator';
 import { GenerationTimer } from './generation-timer';

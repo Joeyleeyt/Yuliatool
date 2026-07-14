@@ -6,10 +6,20 @@ import type {
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
+  AnalysisRow,
 } from '@yulia/db';
 
 // Re-export row shapes as the API DTOs (server returns them directly).
-export type { ProjectRow, SceneRow, PromptRow, AssetRow, TranscriptRow, RenderRow, ActivityLogRow };
+export type {
+  ProjectRow,
+  SceneRow,
+  PromptRow,
+  AssetRow,
+  TranscriptRow,
+  RenderRow,
+  ActivityLogRow,
+  AnalysisRow,
+};
 
 export interface Paginated<T> {
   items: T[];

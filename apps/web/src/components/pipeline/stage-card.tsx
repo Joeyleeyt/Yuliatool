@@ -2,8 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Check, Loader2, Clock, AlertCircle } from 'lucide-react';
-import type { PipelineStage } from './stages';
-import type { NodeState } from './pipeline-node';
+import type { PipelineStage, NodeState } from './stages';
 import { cn } from '@/lib/utils';
 
 const medallion: Record<NodeState, string> = {

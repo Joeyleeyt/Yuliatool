@@ -12,6 +12,7 @@ import type {
   StatusView,
   TranscriptRow,
   ActivityLogRow,
+  AnalysisRow,
   UploadTicket,
 } from '@/lib/api/types';
 
@@ -82,6 +83,13 @@ export function useActivity(id: string) {
   return useQuery({
     queryKey: ['activity', id],
     queryFn: () => api<{ activity: ActivityLogRow[] }>(`/api/projects/${id}/activity`),
+  });
+}
+
+export function useAnalysis(id: string) {
+  return useQuery({
+    queryKey: ['analysis', id],
+    queryFn: () => api<{ analysis: AnalysisRow | null }>(`/api/projects/${id}/analysis`),
   });
 }
 

@@ -3,6 +3,7 @@ import { Hero } from '@/components/marketing/hero';
 import { HowItWorks } from '@/components/marketing/how-it-works';
 import { PipelineShowcase } from '@/components/marketing/pipeline-showcase';
 import { Examples } from '@/components/marketing/examples';
+import { Testimonials } from '@/components/marketing/testimonials';
 import { Features } from '@/components/marketing/features';
 import { Pricing } from '@/components/marketing/pricing';
 import { Faq } from '@/components/marketing/faq';
@@ -17,6 +18,7 @@ export default function HomePage() {
         <HowItWorks />
         <PipelineShowcase />
         <Examples />
+        <Testimonials />
         <Features />
         <Pricing />
         <Faq />

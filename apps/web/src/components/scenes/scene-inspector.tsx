@@ -8,6 +8,8 @@ import {
   ImageIcon,
   Copy,
   Clapperboard,
+  RotateCw,
+  Wand2,
   type LucideIcon,
 } from 'lucide-react';
 import type { SceneView } from '@/lib/api/types';
@@ -234,6 +236,15 @@ function PromptTab({ scene }: { scene: SceneView }) {
           <Copy className="h-3.5 w-3.5" />
           Copy
         </Button>
+        <Button size="sm" variant="outline" disabled title="Regenerate this scene — coming soon">
+          <RotateCw className="h-3.5 w-3.5" />
+          Regenerate
+        </Button>
+        <Button size="sm" variant="outline" disabled title="Edit and re-run the prompt — coming soon">
+          <Wand2 className="h-3.5 w-3.5" />
+          Improve prompt
+        </Button>
+        <Badge tone="neutral">Coming soon</Badge>
       </div>
     </div>
   );

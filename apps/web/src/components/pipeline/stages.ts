@@ -78,6 +78,9 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   },
 ];
 
+/** Visual state of a pipeline stage node, independent of which component renders it. */
+export type NodeState = 'done' | 'active' | 'pending' | 'error';
+
 /** Resolve a raw project status to its display stage index (0-based). Returns -1 for terminal-only. */
 export function stageIndexForStatus(status: string): number {
   const i = PIPELINE_STAGES.findIndex((s) => s.statuses.includes(status));
