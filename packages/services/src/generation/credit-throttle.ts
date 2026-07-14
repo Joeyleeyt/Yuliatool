@@ -63,6 +63,8 @@ export class CreditThrottle {
 
   constructor(
     private readonly kind: GenerationKind,
+    /** Which account (key) in the pool this throttle paces — each has its own window. */
+    private readonly keyIndex: number = 0,
     private readonly client: SixtyNineLabsClient = new SixtyNineLabsClient(),
     private readonly onWait?: (info: { waitMs: number; remaining: number; resetsAt: string | null }) => void,
   ) {}
@@ -134,7 +136,7 @@ export class CreditThrottle {
     if (this.snapshot && now - this.snapshot.fetchedAt < SNAPSHOT_TTL_MS) {
       return this.snapshot.credits;
     }
-    const credits = await this.client.getCredits(this.kind);
+    const credits = await this.client.getCredits(this.kind, this.keyIndex);
     this.snapshot = { credits, fetchedAt: now };
     // A fresh snapshot already reflects real `used`, so drop stale local
     // reservations — they've either landed (counted in `used`) or were released.

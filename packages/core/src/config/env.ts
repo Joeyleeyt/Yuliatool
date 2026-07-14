@@ -51,6 +51,15 @@ const EnvSchema = z.object({
 
   // 69Labs
   SIXTYNINE_LABS_API_KEY: z.string().min(1),
+  // Optional POOL of keys for more generation throughput on the single active
+  // project (the queue stays strictly 1-by-1 — keys never run two projects at
+  // once). Comma-separated; when set it REPLACES the single key as the pool.
+  // Each key is a separate 69Labs account with its own concurrent/credit caps,
+  // so a project's per-scene jobs spread across them and finish faster. Each
+  // job is pinned to one key for its whole submit→poll→download lifecycle.
+  // Leave unset to run on just SIXTYNINE_LABS_API_KEY (today's behavior).
+  //   e.g. SIXTYNINE_LABS_API_KEYS="key_aaa,key_bbb,key_ccc"
+  SIXTYNINE_LABS_API_KEYS: z.string().optional(),
   SIXTYNINE_LABS_BASE_URL: z.string().url().default('https://69labs.vip/api/v1'),
   // Optional model overrides. Unset -> the account's default model is used
   // (currently Veo 3.1 Lite for video). Some models (e.g. Veo) reject a

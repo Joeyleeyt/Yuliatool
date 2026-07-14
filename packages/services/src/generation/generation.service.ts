@@ -20,11 +20,18 @@ const throttleLog = createLogger({ component: 'credit-throttle' });
  * machines too. Lazily created so a process that never generates (e.g. web)
  * doesn't build one.
  */
-const throttles: Partial<Record<GenerationKind, CreditThrottle>> = {};
-function throttleFor(kind: GenerationKind, client: SixtyNineLabsClient): CreditThrottle {
-  return (throttles[kind] ??= new CreditThrottle(kind, client, (info) =>
+// One throttle per (kind, key). Each key is a separate 69Labs account with its
+// OWN credit window, so budget must be paced per account, not globally.
+const throttles: Record<string, CreditThrottle> = {};
+function throttleFor(
+  kind: GenerationKind,
+  keyIndex: number,
+  client: SixtyNineLabsClient,
+): CreditThrottle {
+  const id = `${kind}:${keyIndex}`;
+  return (throttles[id] ??= new CreditThrottle(kind, keyIndex, client, (info) =>
     throttleLog.warn(
-      { kind, ...info, waitSec: Math.round(info.waitMs / 1000) },
+      { kind, keyIndex, ...info, waitSec: Math.round(info.waitMs / 1000) },
       'credit budget exhausted — pausing new submits until window reset',
     ),
   ));
@@ -41,16 +48,21 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
 
   constructor(protected readonly client: SixtyNineLabsClient = new SixtyNineLabsClient()) {}
 
+  /** Number of keys (accounts) in the pool. */
+  get keyCount(): number {
+    return this.client.keyCount;
+  }
+
   /** Map our normalized request onto the fields this kind's endpoint accepts. */
   protected abstract buildBody(req: GenerationRequest): CreateGenerationBody;
 
-  async submit(req: GenerationRequest): Promise<GenerationSubmission> {
-    // Pace against the live per-window credit budget so the pipeline doesn't
-    // burst past 69Labs' quota and 403 every remaining scene. acquire() blocks
-    // (up to the window reset) until there's budget and reserves one gen's cost.
-    const { release } = await throttleFor(this.kind, this.client).acquire();
+  async submit(req: GenerationRequest, keyIndex = 0): Promise<GenerationSubmission> {
+    // Pace against the live per-window credit budget (of THIS key's account) so
+    // the pipeline doesn't burst past 69Labs' quota and 403 every remaining
+    // scene. acquire() blocks (up to the window reset) until there's budget.
+    const { release } = await throttleFor(this.kind, keyIndex, this.client).acquire();
     try {
-      const gen = await this.client.createGeneration(this.kind, this.buildBody(req));
+      const gen = await this.client.createGeneration(this.kind, this.buildBody(req), keyIndex);
       return { externalId: gen.id, status: gen.status };
     } catch (err) {
       // The submit failed, so no credit was actually consumed by a created job —
@@ -61,8 +73,8 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
     }
   }
 
-  async poll(externalId: string): Promise<GenerationResult> {
-    const gen = await this.client.getGeneration(this.kind, externalId);
+  async poll(externalId: string, keyIndex = 0): Promise<GenerationResult> {
+    const gen = await this.client.getGeneration(this.kind, externalId, keyIndex);
     return {
       externalId: gen.id,
       status: gen.status,
@@ -73,11 +85,11 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
     };
   }
 
-  async download(result: GenerationResult): Promise<Readable> {
+  async download(result: GenerationResult, keyIndex = 0): Promise<Readable> {
     if (!result.externalId) {
       throw new ExternalServiceError('69labs', 'no job id to download', { retryable: false });
     }
-    return this.client.download(this.kind, result.externalId);
+    return this.client.download(this.kind, result.externalId, keyIndex);
   }
 }
 

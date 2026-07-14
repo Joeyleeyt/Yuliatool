@@ -16,6 +16,7 @@ import type { Json, SceneRow } from '@yulia/db';
 import {
   VideoGenerationService,
   ImageGenerationService,
+  keyIndexForJob,
   type GenerationService,
 } from '@yulia/services';
 import type { AppContext } from '../context.js';
@@ -259,16 +260,22 @@ export class DownloadAssetsService {
       : R2_PREFIX.sceneImage(projectId, sceneId, ext, slot);
 
     await this.ctx.repos.assets.updateStatus(asset.id, 'downloading');
-    this.ctx.logger.info({ projectId, sceneId, kind }, 'downloading generated layer into R2');
+    // Same key that GENERATED this job must download it (the id lives only on
+    // that account) — recompute the same pinned index from the stable job key.
+    const keyIndex = keyIndexForJob(`${sceneId}:${kind}:${slot}`, this.gens[kind].keyCount);
+    this.ctx.logger.info({ projectId, sceneId, kind, keyIndex }, 'downloading generated layer into R2');
 
-    const stream = await this.gens[kind].download({
-      externalId: asset.external_id ?? '',
-      status: 'completed',
-      resultUrl: asset.source_url,
-      costUsd: null,
-      error: null,
-      raw: null,
-    });
+    const stream = await this.gens[kind].download(
+      {
+        externalId: asset.external_id ?? '',
+        status: 'completed',
+        resultUrl: asset.source_url,
+        costUsd: null,
+        error: null,
+        raw: null,
+      },
+      keyIndex,
+    );
 
     const { buffer, sha256 } = await collect(stream);
     const contentType = asset.content_type ?? (isVideo ? 'video/mp4' : 'image/png');

@@ -101,24 +101,48 @@ const CONCURRENCY_LIMIT_MESSAGE = /concurrent .* generation limit reached/i;
 const CREDIT_LIMIT_MESSAGE = /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i;
 
 export class SixtyNineLabsClient {
+  private readonly keys: string[];
+
   constructor(
-    private readonly apiKey: string = env.SIXTYNINE_LABS_API_KEY,
+    keys: string[] = resolveApiKeys(),
     private readonly baseUrl: string = env.SIXTYNINE_LABS_BASE_URL,
-  ) {}
+  ) {
+    this.keys = keys.length > 0 ? keys : [env.SIXTYNINE_LABS_API_KEY];
+  }
+
+  /** How many 69Labs accounts (keys) are configured. */
+  get keyCount(): number {
+    return this.keys.length;
+  }
+
+  /** The Bearer key for a given job's pinned index (wraps safely). */
+  private keyAt(keyIndex: number): string {
+    const n = this.keys.length;
+    return this.keys[((keyIndex % n) + n) % n]!;
+  }
 
   /** URL path segment for a generation kind: 'videos' | 'images'. */
   private resource(kind: GenerationKind): string {
     return kind === 'video' ? 'videos' : 'images';
   }
 
-  async createGeneration(kind: GenerationKind, body: CreateGenerationBody): Promise<ProviderGeneration> {
-    const json = await this.request('POST', `/${this.resource(kind)}/generate`, body);
+  async createGeneration(
+    kind: GenerationKind,
+    body: CreateGenerationBody,
+    keyIndex = 0,
+  ): Promise<ProviderGeneration> {
+    const json = await this.request('POST', `/${this.resource(kind)}/generate`, body, keyIndex);
     // Create returns only { id, queuePosition } — no status field yet.
     return this.normalize(kind, json, 'pending');
   }
 
-  async getGeneration(kind: GenerationKind, id: string): Promise<ProviderGeneration> {
-    const json = await this.request('GET', `/${this.resource(kind)}/status/${encodeURIComponent(id)}`);
+  async getGeneration(kind: GenerationKind, id: string, keyIndex = 0): Promise<ProviderGeneration> {
+    const json = await this.request(
+      'GET',
+      `/${this.resource(kind)}/status/${encodeURIComponent(id)}`,
+      undefined,
+      keyIndex,
+    );
     return this.normalize(kind, json);
   }
 
@@ -132,8 +156,8 @@ export class SixtyNineLabsClient {
    * every worker instance reads the same provider-side counter, the pacing is
    * correct across multiple machines without shared client state.
    */
-  async getCredits(kind: GenerationKind): Promise<ProviderCredits> {
-    const json = (await this.request('GET', '/models')) as Record<string, unknown>;
+  async getCredits(kind: GenerationKind, keyIndex = 0): Promise<ProviderCredits> {
+    const json = (await this.request('GET', '/models', undefined, keyIndex)) as Record<string, unknown>;
     const section = (json?.[this.resource(kind)] ?? {}) as Record<string, unknown>;
     const credits = (section.credits ?? {}) as Record<string, unknown>;
     const models = Array.isArray(section.models) ? (section.models as Record<string, unknown>[]) : [];
@@ -161,7 +185,7 @@ export class SixtyNineLabsClient {
    * (the presigned URL is self-authenticating and a stray Authorization header
    * can make some S3-compatible stores reject the request).
    */
-  async download(kind: GenerationKind, id: string): Promise<Readable> {
+  async download(kind: GenerationKind, id: string, keyIndex = 0): Promise<Readable> {
     const url = `${this.baseUrl}/${this.resource(kind)}/download/${encodeURIComponent(id)}`;
     // Bound only the connect/redirect handshake; the body streams unbounded once
     // headers arrive (a large video must not be aborted mid-download).
@@ -169,7 +193,7 @@ export class SixtyNineLabsClient {
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       let res = await fetch(url, {
-        headers: { authorization: `Bearer ${this.apiKey}` },
+        headers: { authorization: `Bearer ${this.keyAt(keyIndex)}` },
         redirect: 'manual',
         signal: controller.signal,
       });
@@ -202,7 +226,12 @@ export class SixtyNineLabsClient {
     }
   }
 
-  private async request(method: string, path: string, body?: unknown): Promise<unknown> {
+  private async request(
+    method: string,
+    path: string,
+    body?: unknown,
+    keyIndex = 0,
+  ): Promise<unknown> {
     for (let attempt = 0; ; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -210,7 +239,7 @@ export class SixtyNineLabsClient {
         const res = await fetch(`${this.baseUrl}${path}`, {
           method,
           headers: {
-            authorization: `Bearer ${this.apiKey}`,
+            authorization: `Bearer ${this.keyAt(keyIndex)}`,
             'content-type': 'application/json',
             accept: 'application/json',
           },
@@ -316,6 +345,37 @@ function concurrencyLimitDelayMs(attempt: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolve the configured 69Labs key pool: the comma-separated
+ * SIXTYNINE_LABS_API_KEYS if set (each trimmed, blanks dropped), else the single
+ * SIXTYNINE_LABS_API_KEY. Always returns at least one key.
+ */
+export function resolveApiKeys(): string[] {
+  const csv =
+    env.SIXTYNINE_LABS_API_KEYS?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  return csv.length > 0 ? csv : [env.SIXTYNINE_LABS_API_KEY];
+}
+
+/**
+ * Deterministically pin a generation job to ONE key in the pool. Submit, poll,
+ * and download must all use the SAME account (the provider job id only exists on
+ * the account that created it), so the choice is derived from a STABLE job key
+ * (e.g. `sceneId:kind:slot`) rather than a rotating counter — every stage
+ * recomputes the same index without persisting it. FNV-1a hash spread across the
+ * pool distributes a project's jobs roughly evenly over the accounts.
+ */
+export function keyIndexForJob(jobKey: string, keyCount: number): number {
+  if (keyCount <= 1) return 0;
+  let h = 2166136261;
+  for (let i = 0; i < jobKey.length; i++) {
+    h ^= jobKey.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % keyCount;
 }
 
 function numberOr(v: unknown, fallback: number): number {

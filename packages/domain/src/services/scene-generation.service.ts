@@ -15,6 +15,7 @@ import type { Json, PromptRow, SceneRow } from '@yulia/db';
 import {
   VideoGenerationService,
   ImageGenerationService,
+  keyIndexForJob,
   type GenerationService,
   type GenerationKind,
   type GenerationRequest,
@@ -221,12 +222,17 @@ export class SceneGenerationService {
     const regen = regenCountOf(asset);
     const req = reqFactory(regen);
     const gen = this.gens[kind];
+    // Pin this job to ONE key in the pool for its whole submit→poll→download
+    // lifecycle (the provider id only exists on the account that created it).
+    // Derived from stable ids so generation, download, and reconcile all agree
+    // without persisting the choice. Single key -> always 0.
+    const keyIndex = keyIndexForJob(`${sceneId}:${kind}:${slot}`, gen.keyCount);
     let externalId = asset.external_id;
 
     if (!externalId) {
       if (submitDelayMs > 0) await sleep(submitDelayMs);
-      this.ctx.logger.info({ projectId, sceneId, kind }, 'submitting layer to 69labs');
-      const submission = await gen.submit(req);
+      this.ctx.logger.info({ projectId, sceneId, kind, keyIndex }, 'submitting layer to 69labs');
+      const submission = await gen.submit(req, keyIndex);
       externalId = submission.externalId;
       await this.ctx.repos.assets.setSubmitted(asset.id, {
         provider: 'sixtynine_labs',
@@ -256,8 +262,8 @@ export class SceneGenerationService {
       }
     }
 
-    this.ctx.logger.info({ projectId, sceneId, kind, externalId }, 'awaiting 69labs generation');
-    const result = await this.pollUntilTerminal(gen, externalId);
+    this.ctx.logger.info({ projectId, sceneId, kind, externalId, keyIndex }, 'awaiting 69labs generation');
+    const result = await this.pollUntilTerminal(gen, externalId, keyIndex);
 
     if (result.status === 'failed') {
       await this.ctx.repos.assets.clearGeneration(asset.id);
@@ -407,11 +413,12 @@ export class SceneGenerationService {
   private async pollUntilTerminal(
     gen: GenerationService,
     externalId: string,
+    keyIndex = 0,
   ): Promise<GenerationResult> {
     const deadline = Date.now() + env.GENERATION_POLL_TIMEOUT_SEC * 1000;
     let polls = 0;
     for (;;) {
-      const result = await gen.poll(externalId);
+      const result = await gen.poll(externalId, keyIndex);
       polls += 1;
       this.ctx.logger.debug({ externalId, poll: polls, status: result.status }, 'polled 69labs');
       if (result.status === 'completed' || result.status === 'failed') return result;
