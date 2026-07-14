@@ -30,9 +30,10 @@ export function PipelineFlow({ id }: { id: string }) {
 
   if (!data) return null;
 
-  const running = !['completed', 'failed', 'created'].includes(data.status);
+  const running = !['completed', 'failed', 'created', 'queued'].includes(data.status);
   const failed = data.status === 'failed';
   const completed = data.status === 'completed';
+  const queued = data.status === 'queued';
   const cs = stageIndexForStatus(data.status);
   const meta = PROJECT_STATUS_META[data.status as keyof typeof PROJECT_STATUS_META];
   const eta = running ? etaLabel(data.startedAt, data.progress) : undefined;
@@ -93,14 +94,20 @@ export function PipelineFlow({ id }: { id: string }) {
       {/* Header */}
       <div className="relative mb-6 flex items-center gap-5">
         <ProgressIndicator
-          value={completed ? 100 : data.progress}
+          value={completed ? 100 : queued ? 0 : data.progress}
           tone={failed ? 'danger' : completed ? 'success' : 'accent'}
-          label="done"
+          label={queued ? 'queued' : 'done'}
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-medium tracking-tight text-fg">
-              {completed ? 'Production complete' : failed ? 'Production halted' : 'Studio at work'}
+              {completed
+                ? 'Production complete'
+                : failed
+                  ? 'Production halted'
+                  : queued
+                    ? 'Queued'
+                    : 'Studio at work'}
             </h3>
             {running && (
               <Badge tone="violet">
@@ -111,10 +118,15 @@ export function PipelineFlow({ id }: { id: string }) {
                 Live
               </Badge>
             )}
+            {queued && <Badge tone="amber">Waiting</Badge>}
           </div>
           <p className="mt-1 text-sm text-fg-muted">
-            {meta?.label ?? data.status}
-            {data.totalScenes > 0 && ` · ${data.completedScenes}/${data.totalScenes} scenes ready`}
+            {queued
+              ? data.queuePosition && data.queuePosition > 1
+                ? `Position ${data.queuePosition} in queue — starts when the current productions finish`
+                : 'Next up — starts as soon as the current production finishes'
+              : (meta?.label ?? data.status)}
+            {!queued && data.totalScenes > 0 && ` · ${data.completedScenes}/${data.totalScenes} scenes ready`}
           </p>
           <div className="mt-1 flex items-center gap-3">
             <GenerationTimer

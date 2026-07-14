@@ -84,7 +84,39 @@ export class RecoveryService {
       }
     }
     if (projects.length > 0) this.ctx.logger.info({ resumed }, 'boot recovery complete');
+    // If nothing is active but projects are waiting in the 1-by-1 queue, start
+    // the next one (e.g. a crash between "active finished" and "next promoted").
+    if (projects.length === 0) await this.promoteNextQueued();
     return resumed;
+  }
+
+  /**
+   * Global 1-by-1 queue: if the generation slot is free, claim the oldest queued
+   * project and resume it (dispatches its first stage). No-op if the slot is busy
+   * or nothing is queued. Call after every completion/failure and at boot.
+   */
+  async promoteNextQueued(): Promise<string | null> {
+    const id = await this.ctx.repos.projects.claimNextQueued();
+    if (!id) return null;
+    try {
+      await this.resume(id);
+      this.ctx.logger.info({ projectId: id }, 'queue: promoted next project');
+    } catch (err) {
+      // The project is now marked active but its dispatch failed — fail it so the
+      // slot frees and the NEXT queued project can be promoted (rather than the
+      // queue wedging behind a project that never actually started).
+      this.ctx.logger.error({ err, projectId: id }, 'queue: promotion resume failed');
+      await this.ctx.repos.projects
+        .applyStatus(id, {
+          status: ProjectStatus.FAILED,
+          errorCode: 'PROMOTE_FAILED',
+          errorMessage: 'Could not start queued project',
+          failedAt: new Date().toISOString(),
+        })
+        .catch(() => undefined);
+      await this.promoteNextQueued();
+    }
+    return id;
   }
 
   /**

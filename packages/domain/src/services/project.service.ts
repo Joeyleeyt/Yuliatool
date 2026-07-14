@@ -118,7 +118,13 @@ export class ProjectService {
     if (project.status !== ProjectStatus.FAILED) {
       throw new ValidationError('Only failed projects can be retried', { status: project.status });
     }
-    await new RecoveryService(this.ctx).resume(id);
+    // Respect the global 1-by-1 queue: resume immediately only if the generation
+    // slot is free; otherwise re-queue and let promotion resume it (from the
+    // correct stage, since resume() re-plans from persisted artifacts).
+    const decision = await this.ctx.repos.projects.tryStartOrQueue(id);
+    if (decision === 'started') {
+      await new RecoveryService(this.ctx).resume(id);
+    }
     const updated = await this.ctx.repos.projects.findById(id);
     return updated!;
   }
@@ -138,6 +144,13 @@ export class ProjectService {
       message: error.message,
       data: { code: error.code },
     });
+
+    // A failed production frees the single generation slot — promote the next
+    // queued project (no-op if the slot is still busy or nothing is queued).
+    await new RecoveryService(this.ctx)
+      .promoteNextQueued()
+      .catch((err) => this.ctx.logger.error({ err, projectId: id }, 'queue: promote after failure failed'));
+
     return updated;
   }
 }

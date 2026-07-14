@@ -30,6 +30,8 @@ export interface StatusView {
   completedAt: string | null;
   /** Total generation seconds once COMPLETED; null while running (UI ticks live). */
   durationSec: number | null;
+  /** 1-based place in the global 1-by-1 queue while QUEUED; null otherwise. */
+  queuePosition: number | null;
 }
 
 export interface SceneView extends SceneRow {

@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Trash2, RotateCw } from 'lucide-react';
 import { useProject, useDeleteProject, useRetryProject } from '@/lib/query/hooks';
 import { StatusBadge } from '@/components/status-badge';
@@ -20,9 +22,22 @@ import { useToast } from '@/components/ui/toast';
 export function ProjectDetail({ id }: { id: string }) {
   const router = useRouter();
   const toast = useToast();
+  const qc = useQueryClient();
   const { data, isLoading } = useProject(id);
   const del = useDeleteProject();
   const retry = useRetryProject(id);
+
+  // When the project finishes, refresh the tab data once so scenes / assets /
+  // logs reflect their final state without a manual reload (useProject polls
+  // the status; the render + player refresh via their own hooks).
+  const status = data?.project?.status;
+  useEffect(() => {
+    if (status === 'completed' || status === 'failed') {
+      void qc.invalidateQueries({ queryKey: ['scenes', id] });
+      void qc.invalidateQueries({ queryKey: ['assets', id] });
+      void qc.invalidateQueries({ queryKey: ['activity', id] });
+    }
+  }, [status, id, qc]);
 
   const onRetry = () =>
     retry.mutate(undefined, {

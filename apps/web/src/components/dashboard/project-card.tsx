@@ -13,7 +13,8 @@ const TERMINAL = new Set(['completed', 'failed']);
 function thumbTint(status: string): string {
   if (status === 'completed') return 'from-emerald-500/25 via-teal-500/8';
   if (status === 'failed') return 'from-red-500/25 via-rose-500/8';
-  if (status === 'created' || status === 'uploading_audio') return 'from-surface-3 via-surface-2';
+  if (status === 'created' || status === 'uploading_audio' || status === 'queued')
+    return 'from-surface-3 via-surface-2';
   return 'from-violet-500/25 via-fuchsia-500/8'; // actively generating
 }
 
@@ -29,7 +30,10 @@ function relativeDate(iso: string): string {
 
 export function ProjectCard({ project }: { project: ProjectRow }) {
   const vertical = project.render_format === 'vertical_1080x1920';
-  const active = !TERMINAL.has(project.status) && project.status !== 'created';
+  const active =
+    !TERMINAL.has(project.status) &&
+    project.status !== 'created' &&
+    project.status !== 'queued';
   const done = project.status === 'completed';
   const pct =
     project.total_scenes > 0

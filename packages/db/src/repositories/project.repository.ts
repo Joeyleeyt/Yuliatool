@@ -1,8 +1,15 @@
-import { ProjectStatus } from '@yulia/core';
+import { ProjectStatus, ACTIVE_PROJECT_STATUSES } from '@yulia/core';
 import type { RenderFormat } from '@yulia/core';
 import type { Sql } from '../client.js';
 import type { ProjectRow } from '../types/index.js';
 import { BaseRepository } from './base.repository.js';
+
+/**
+ * Fixed key for the global project-queue advisory lock. Admission and promotion
+ * both take `pg_advisory_xact_lock(PROJECT_QUEUE_LOCK)` so the "is a slot free?"
+ * check-and-set is serialized across all workers/web processes.
+ */
+const PROJECT_QUEUE_LOCK = 826140;
 
 export interface CreateProjectData {
   ownerId: string;
@@ -110,6 +117,61 @@ export class ProjectRepository extends BaseRepository<ProjectRow> {
     return this.sql<ProjectRow[]>`
       select * from projects where status::text = any(${statuses})
       order by created_at asc limit ${limit}`;
+  }
+
+  /**
+   * Global 1-by-1 queue — ADMISSION. Under a global advisory lock (so concurrent
+   * uploads can't both start), atomically: if any production already occupies the
+   * generation slot, park this project as `queued`; otherwise start it
+   * (`transcribing`). Returns which happened; the caller dispatches transcription
+   * only when 'started'. The lock + the promotion method below share one key, so
+   * admission and promotion are serialized against each other.
+   */
+  async tryStartOrQueue(id: string): Promise<'started' | 'queued'> {
+    return this.sql.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(${PROJECT_QUEUE_LOCK})`;
+      const active = await tx<{ c: number }[]>`
+        select count(*)::int as c from projects where status::text = any(${[...ACTIVE_PROJECT_STATUSES]})`;
+      const busy = (active[0]?.c ?? 0) > 0;
+      const next = busy ? ProjectStatus.QUEUED : ProjectStatus.TRANSCRIBING;
+      await tx`
+        update projects set status = ${next}, error_code = null, error_message = null, failed_at = null
+        where id = ${id}`;
+      return busy ? 'queued' : 'started';
+    });
+  }
+
+  /**
+   * Global 1-by-1 queue — PROMOTION. Under the same advisory lock: if the slot is
+   * free, claim the OLDEST queued project, flip it to `transcribing`, and return
+   * its id (the caller then resumes/dispatches it). Returns null if the slot is
+   * busy or nothing is queued. Safe to call after every completion/failure and at
+   * boot — it self-guards on the active-slot check.
+   */
+  async claimNextQueued(): Promise<string | null> {
+    return this.sql.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(${PROJECT_QUEUE_LOCK})`;
+      const active = await tx`
+        select 1 from projects where status::text = any(${[...ACTIVE_PROJECT_STATUSES]}) limit 1`;
+      if (active.length > 0) return null;
+      const next = await tx<{ id: string }[]>`
+        select id from projects where status = 'queued' order by created_at asc limit 1`;
+      const id = next[0]?.id;
+      if (!id) return null;
+      await tx`
+        update projects set status = ${ProjectStatus.TRANSCRIBING}, error_code = null, error_message = null, failed_at = null
+        where id = ${id}`;
+      return id;
+    });
+  }
+
+  /** 1-based position of a queued project in the global queue (oldest = 1). */
+  async queuePosition(id: string): Promise<number | null> {
+    const rows = await this.sql<{ pos: number }[]>`
+      select count(*)::int + 1 as pos from projects q
+      where q.status = 'queued'
+        and q.created_at < (select created_at from projects where id = ${id})`;
+    return rows[0]?.pos ?? null;
   }
 
   /**

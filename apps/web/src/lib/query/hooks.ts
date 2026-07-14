@@ -31,6 +31,10 @@ export function useProject(id: string) {
   return useQuery({
     queryKey: ['project', id],
     queryFn: () => api<{ project: ProjectRow }>(`/api/projects/${id}`),
+    // Poll until the project reaches a terminal state so the header status and
+    // the completed-video gate update live (no manual refresh needed).
+    refetchInterval: (query) =>
+      query.state.data && TERMINAL.has(query.state.data.project.status) ? false : 4000,
   });
 }
 
@@ -67,6 +71,10 @@ export function useRender(id: string) {
   return useQuery({
     queryKey: ['render', id],
     queryFn: () => api<RenderView>(`/api/projects/${id}/render`),
+    // Keep polling until the final MP4 is ready + has a playable URL, so the
+    // player appears the moment rendering finishes.
+    refetchInterval: (query) =>
+      query.state.data?.render?.status === 'completed' && query.state.data.url ? false : 5000,
   });
 }
 

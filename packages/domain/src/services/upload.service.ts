@@ -96,34 +96,47 @@ export class UploadService {
       sizeBytes: head.size,
     });
 
-    const project = await this.projects.transition(projectId, ProjectStatus.TRANSCRIBING);
+    // Global 1-by-1 queue: start this project only if no other production is
+    // currently generating; otherwise park it as `queued` (atomic under an
+    // advisory lock, so two simultaneous uploads can't both start).
+    const decision = await this.ctx.repos.projects.tryStartOrQueue(projectId);
 
-    // Idempotent dispatch: ledger + BullMQ dedupe on the deterministic key, so a
-    // double /complete call cannot enqueue transcription twice.
-    //
-    // The status flip above is committed before this line, so a failed enqueue
-    // (e.g. Redis unreachable from the web process) would otherwise leave the
-    // project stranded in TRANSCRIBING with no job ever running. Surface it as a
-    // FAILED project instead — visible in the UI and recoverable via retry.
-    try {
-      await this.ctx.jobs.dispatch(QueueName.TRANSCRIPTION, { projectId, assetId }, { projectId });
-    } catch (cause) {
-      await this.projects
-        .fail(projectId, {
-          code: 'ENQUEUE_FAILED',
-          message: 'Could not queue transcription — job broker unavailable',
-        })
-        .catch(() => undefined);
-      throw cause;
+    if (decision === 'queued') {
+      const position = await this.ctx.repos.projects.queuePosition(projectId);
+      await this.ctx.repos.activity.log({
+        projectId,
+        actorId: ownerId,
+        type: 'audio_ready',
+        message: `Voiceover uploaded; queued${position ? ` (position ${position})` : ''} — starts when the current production finishes`,
+        data: position ? { queuePosition: position } : {},
+      });
+    } else {
+      // Started now. Idempotent dispatch: ledger + BullMQ dedupe on the
+      // deterministic key, so a double /complete call cannot enqueue twice.
+      // The status flip above is committed, so a failed enqueue (e.g. Redis
+      // unreachable) would otherwise strand the project in TRANSCRIBING with no
+      // job — fail it instead (visible + retryable).
+      try {
+        await this.ctx.jobs.dispatch(QueueName.TRANSCRIPTION, { projectId, assetId }, { projectId });
+      } catch (cause) {
+        await this.projects
+          .fail(projectId, {
+            code: 'ENQUEUE_FAILED',
+            message: 'Could not queue transcription — job broker unavailable',
+          })
+          .catch(() => undefined);
+        throw cause;
+      }
+      await this.ctx.repos.activity.log({
+        projectId,
+        actorId: ownerId,
+        type: 'audio_ready',
+        message: 'Voiceover uploaded; transcription queued',
+      });
     }
 
-    await this.ctx.repos.activity.log({
-      projectId,
-      actorId: ownerId,
-      type: 'audio_ready',
-      message: 'Voiceover uploaded; transcription queued',
-    });
-    return project;
+    const project = await this.ctx.repos.projects.findById(projectId);
+    return project!;
   }
 }
 

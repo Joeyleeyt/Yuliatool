@@ -1,0 +1,11 @@
+-- Global 1-by-1 project queue.
+--
+-- Projects whose voiceover is uploaded while another production is already
+-- generating are parked in a new `queued` holding state instead of starting
+-- immediately. When the active production finishes (completed or failed), the
+-- oldest queued project is promoted and started — exactly one project runs the
+-- pipeline at a time, regardless of how many API keys are configured.
+--
+-- `alter type ... add value` must run outside a transaction; the migration
+-- runner applies each file on its own, so this is safe as a standalone statement.
+alter type project_status add value if not exists 'queued';

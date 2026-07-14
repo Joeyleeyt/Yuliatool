@@ -18,6 +18,7 @@ import type { SceneRow, Json } from '@yulia/db';
 import { compositeSegment, concatAndMux, type RenderSegment } from '@yulia/ffmpeg';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
+import { RecoveryService } from './recovery.service.js';
 
 const SCRATCH_ROOT = process.env.SCRATCH_DIR ?? join(tmpdir(), 'yulia-render');
 /** Never let a crossfade exceed a segment; floor the on-screen duration. */
@@ -197,6 +198,11 @@ export class RenderService {
     } finally {
       await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     }
+
+    // The generation slot just freed — start the next queued production (1-by-1).
+    await new RecoveryService(this.ctx)
+      .promoteNextQueued()
+      .catch((err) => this.ctx.logger.error({ err, projectId }, 'queue: promote after completion failed'));
   }
 
   /**

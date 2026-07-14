@@ -1,15 +1,19 @@
 'use client';
 
 import { PROJECT_STATUS_META } from '@yulia/core/enums';
-import { CheckCircle2, AlertCircle, Loader2, CircleDashed } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, CircleDashed, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/primitives';
 import { cn } from '@/lib/utils';
 
-type Kind = 'idle' | 'active' | 'done' | 'error';
+type Kind = 'idle' | 'queued' | 'active' | 'done' | 'error';
 
-function classify(status: string): { kind: Kind; tone: 'neutral' | 'violet' | 'emerald' | 'red' } {
+function classify(status: string): {
+  kind: Kind;
+  tone: 'neutral' | 'violet' | 'emerald' | 'red' | 'amber';
+} {
   if (status === 'completed') return { kind: 'done', tone: 'emerald' };
   if (status === 'failed') return { kind: 'error', tone: 'red' };
+  if (status === 'queued') return { kind: 'queued', tone: 'amber' };
   const meta = PROJECT_STATUS_META[status as keyof typeof PROJECT_STATUS_META];
   if (meta && meta.order > 0) return { kind: 'active', tone: 'violet' };
   return { kind: 'idle', tone: 'neutral' };
@@ -20,6 +24,7 @@ export function StatusDot({ status, className }: { status: string; className?: s
   const { kind } = classify(status);
   const color = {
     idle: 'bg-fg-subtle',
+    queued: 'bg-warning',
     active: 'bg-warning',
     done: 'bg-success',
     error: 'bg-danger',
@@ -37,7 +42,13 @@ export function StatusDot({ status, className }: { status: string; className?: s
 export function StatusBadge({ status }: { status: string }) {
   const meta = PROJECT_STATUS_META[status as keyof typeof PROJECT_STATUS_META];
   const { kind, tone } = classify(status);
-  const Icon = { idle: CircleDashed, active: Loader2, done: CheckCircle2, error: AlertCircle }[kind];
+  const Icon = {
+    idle: CircleDashed,
+    queued: Clock,
+    active: Loader2,
+    done: CheckCircle2,
+    error: AlertCircle,
+  }[kind];
   return (
     <Badge tone={tone}>
       <Icon className={cn('h-3 w-3', kind === 'active' && 'animate-spin')} />

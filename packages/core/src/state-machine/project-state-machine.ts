@@ -18,7 +18,15 @@ import { QueueName } from '../enums/job.js';
 /** Adjacency map of allowed transitions. FAILED is reachable from any active state. */
 const TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
   [ProjectStatus.CREATED]: [ProjectStatus.UPLOADING_AUDIO, ProjectStatus.FAILED],
-  [ProjectStatus.UPLOADING_AUDIO]: [ProjectStatus.TRANSCRIBING, ProjectStatus.FAILED],
+  // After upload the project either starts (TRANSCRIBING) or, if another
+  // production holds the single generation slot, parks in QUEUED.
+  [ProjectStatus.UPLOADING_AUDIO]: [
+    ProjectStatus.TRANSCRIBING,
+    ProjectStatus.QUEUED,
+    ProjectStatus.FAILED,
+  ],
+  // Promoted one-by-one to TRANSCRIBING when the active slot frees up.
+  [ProjectStatus.QUEUED]: [ProjectStatus.TRANSCRIBING, ProjectStatus.FAILED],
   [ProjectStatus.TRANSCRIBING]: [ProjectStatus.ANALYZING, ProjectStatus.FAILED],
   [ProjectStatus.ANALYZING]: [ProjectStatus.SEGMENTING, ProjectStatus.FAILED],
   [ProjectStatus.SEGMENTING]: [ProjectStatus.PROMPT_GENERATION, ProjectStatus.FAILED],
@@ -50,6 +58,7 @@ const TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
 const STATUS_TO_QUEUE: Record<ProjectStatus, QueueName | null> = {
   [ProjectStatus.CREATED]: null, // waits for audio upload
   [ProjectStatus.UPLOADING_AUDIO]: null, // advanced by upload-complete event
+  [ProjectStatus.QUEUED]: null, // advanced by the queue-promotion event
   [ProjectStatus.TRANSCRIBING]: QueueName.TRANSCRIPTION,
   [ProjectStatus.ANALYZING]: QueueName.SCRIPT_ANALYSIS,
   [ProjectStatus.SEGMENTING]: QueueName.SCRIPT_ANALYSIS, // segmentation is part of analysis stage

@@ -27,6 +27,8 @@ export interface StatusView {
    * against the current time in that case.
    */
   durationSec: number | null;
+  /** 1-based place in the global 1-by-1 queue while QUEUED; null otherwise. */
+  queuePosition: number | null;
 }
 
 export interface SceneView extends SceneRow {
@@ -73,6 +75,10 @@ export class ProjectReadService {
       completedAt != null
         ? Math.max(0, Math.round((Date.parse(completedAt) - Date.parse(startedAt)) / 1000))
         : null;
+    const queuePosition =
+      project.status === ProjectStatus.QUEUED
+        ? await this.ctx.repos.projects.queuePosition(projectId)
+        : null;
     return {
       status: project.status,
       totalScenes: project.total_scenes,
@@ -82,6 +88,7 @@ export class ProjectReadService {
       startedAt,
       completedAt,
       durationSec,
+      queuePosition,
     };
   }
 
