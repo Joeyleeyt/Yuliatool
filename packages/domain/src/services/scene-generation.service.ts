@@ -23,7 +23,8 @@ import {
 } from '@yulia/services';
 import type { AppContext } from '../context.js';
 import { seedFrom, withRealismPreamble, mergeNegativePrompt } from '../ai/index.js';
-import { HandCheckService } from './hand-check.service.js';
+import { HandCheckService, failOpen as handCheckFailOpen } from './hand-check.service.js';
+import type { HandCheckOutput } from '@yulia/core';
 
 const CONTENT_TYPE: Record<GenerationKind, string> = {
   video: 'video/mp4',
@@ -301,7 +302,18 @@ export class SceneGenerationService {
     // exhausted we accept the last clip rather than fail the project — the render
     // has other guards, and a wedged scene is worse than one imperfect clip.
     if (kind === 'video' && env.HAND_CHECK_ENABLED) {
-      const verdict = await this.handCheck.check(result.resultUrl);
+      let verdict: HandCheckOutput;
+      try {
+        const clip = await gen.download(result, keyIndex);
+        verdict = await this.handCheck.check(clip);
+      } catch (err) {
+        // Same fail-open contract as HandCheckService.check itself: a download
+        // hiccup (network blip, presigned URL already expired) is our
+        // infrastructure flaking, not a verdict on the clip — never block the
+        // project on it.
+        this.ctx.logger.warn({ err, projectId, sceneId, slot }, 'hand-check: clip download failed; skipping (fail-open)');
+        verdict = handCheckFailOpen('clip download failed');
+      }
       if (!verdict.ok) {
         if (regen < env.HAND_CHECK_MAX_RETRIES) {
           this.ctx.logger.warn(
