@@ -32,7 +32,7 @@ export function CtaFooter() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-10 sm:flex-row lg:px-8">
           <Brand href="/" />
           <p className="text-xs text-fg-subtle">
-            © {2026} yulia-video — an autonomous AI filmmaking studio.
+            © {2026} Classy Woman Video — an autonomous AI filmmaking studio.
           </p>
           <div className="flex items-center gap-6 text-xs text-fg-muted">
             <a href="#pricing" className="hover:text-fg">Pricing</a>

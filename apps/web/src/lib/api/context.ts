@@ -34,7 +34,7 @@ export async function requireUser(ctx: AppContext): Promise<AuthedUser> {
   const email = user.email ?? '';
   // Private tool: only the allowlisted accounts may use the API.
   if (!isEmailAllowed(email)) {
-    throw new AppError({ code: 'FORBIDDEN', message: 'This account is not permitted to use yulia-video.' });
+    throw new AppError({ code: 'FORBIDDEN', message: 'This account is not permitted to use Classy Woman Video.' });
   }
   const ensuredKey = `profile:ensured:${user.id}`;
   const alreadyEnsured = await ctx.cache.get<boolean>(ensuredKey);

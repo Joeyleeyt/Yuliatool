@@ -17,7 +17,7 @@ export default function LoginPage() {
   // Surface a message when the guard bounced a non-permitted session here.
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('denied')) {
-      setError('This account is not permitted to use yulia-video.');
+      setError('This account is not permitted to use Classy Woman Video.');
     }
   }, []);
 
@@ -38,7 +38,7 @@ export default function LoginPage() {
     if (!isEmailAllowed(email)) {
       await supabase.auth.signOut();
       setLoading(false);
-      setError('This account is not permitted to use yulia-video.');
+      setError('This account is not permitted to use Classy Woman Video.');
       return;
     }
 

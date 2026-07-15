@@ -19,7 +19,7 @@ const GRADIENTS = [
 export function Examples() {
   return (
     <Section
-      eyebrow="Made with yulia-video"
+      eyebrow="Made with Classy Woman Video"
       title="Films that look directed, not generated."
       description="A soft-luxury editorial house style — every render arrives graded, paced, and finished."
     >

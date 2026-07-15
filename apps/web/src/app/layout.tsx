@@ -9,7 +9,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'yulia-video — Your AI Film Director',
+  title: 'Classy Woman Video — Your AI Film Director',
   description: 'Turn any voiceover into a cinematic YouTube video. AI writes the scenes, generates the visuals, and renders a finished movie — automatically.',
 };
 

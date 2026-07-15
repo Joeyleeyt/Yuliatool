@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Clapperboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** The yulia-video wordmark + film-studio glyph. */
+/** The Classy Woman Video wordmark + film-studio glyph. */
 export function Brand({ className, href = '/projects' }: { className?: string; href?: string }) {
   return (
     <Link href={href} className={cn('group inline-flex items-center gap-2.5', className)}>
@@ -11,7 +11,7 @@ export function Brand({ className, href = '/projects' }: { className?: string; h
         <span className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white/20" />
       </span>
       <span className="text-[15px] font-semibold tracking-tight text-fg">
-        yulia<span className="text-fg-subtle">·</span>video
+        Classy Woman<span className="text-fg-subtle">·</span>Video
       </span>
     </Link>
   );

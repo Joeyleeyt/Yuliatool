@@ -40,7 +40,7 @@ export function Features() {
   return (
     <Section
       id="features"
-      eyebrow="Why yulia-video"
+      eyebrow="Why Classy Woman Video"
       title="Built like production infrastructure, felt like magic."
     >
       <div className="grid gap-px overflow-hidden rounded-2xl border border-line/8 bg-line/8 sm:grid-cols-2 lg:grid-cols-3">
