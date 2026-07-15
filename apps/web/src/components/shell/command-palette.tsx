@@ -90,8 +90,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.98 }}
             transition={{ duration: 0.2, ease: easePremium }}
+            onClick={onClose}
           >
-            <div className="overflow-hidden rounded-2xl border border-line/10 bg-surface-1 shadow-lg ring-hairline">
+            <div
+              className="overflow-hidden rounded-2xl border border-line/10 bg-surface-1 shadow-lg ring-hairline"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center gap-2.5 border-b border-line/8 px-4 py-3">
                 <Search className="h-4 w-4 shrink-0 text-fg-subtle" />
                 <input
