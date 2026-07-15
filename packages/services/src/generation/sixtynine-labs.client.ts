@@ -101,24 +101,38 @@ const CONCURRENCY_LIMIT_MESSAGE = /concurrent .* generation limit reached/i;
 const CREDIT_LIMIT_MESSAGE = /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i;
 
 export class SixtyNineLabsClient {
-  private readonly keys: string[];
+  // Separate key pools per media type. 69Labs plans give far more image than
+  // video credits, so video keys are dedicated (and can be scaled independently)
+  // rather than sharing one flat pool where video would exhaust an account while
+  // its image budget sits unused. When per-media keys aren't configured, both
+  // pools resolve to the same shared pool (today's behavior).
+  private readonly imageKeys: string[];
+  private readonly videoKeys: string[];
 
   constructor(
-    keys: string[] = resolveApiKeys(),
+    pools: { image: string[]; video: string[] } = resolveApiKeyPools(),
     private readonly baseUrl: string = env.SIXTYNINE_LABS_BASE_URL,
   ) {
-    this.keys = keys.length > 0 ? keys : [env.SIXTYNINE_LABS_API_KEY];
+    const fallback = [env.SIXTYNINE_LABS_API_KEY];
+    this.imageKeys = pools.image.length > 0 ? pools.image : fallback;
+    this.videoKeys = pools.video.length > 0 ? pools.video : fallback;
   }
 
-  /** How many 69Labs accounts (keys) are configured. */
-  get keyCount(): number {
-    return this.keys.length;
+  /** The key pool for a media kind. */
+  private poolFor(kind: GenerationKind): string[] {
+    return kind === 'video' ? this.videoKeys : this.imageKeys;
   }
 
-  /** The Bearer key for a given job's pinned index (wraps safely). */
-  private keyAt(keyIndex: number): string {
-    const n = this.keys.length;
-    return this.keys[((keyIndex % n) + n) % n]!;
+  /** How many 69Labs accounts (keys) are configured for a media kind. */
+  keyCountFor(kind: GenerationKind): number {
+    return this.poolFor(kind).length;
+  }
+
+  /** The Bearer key for a given kind's pinned index (wraps safely). */
+  private keyAt(kind: GenerationKind, keyIndex: number): string {
+    const pool = this.poolFor(kind);
+    const n = pool.length;
+    return pool[((keyIndex % n) + n) % n]!;
   }
 
   /** URL path segment for a generation kind: 'videos' | 'images'. */
@@ -131,13 +145,14 @@ export class SixtyNineLabsClient {
     body: CreateGenerationBody,
     keyIndex = 0,
   ): Promise<ProviderGeneration> {
-    const json = await this.request('POST', `/${this.resource(kind)}/generate`, body, keyIndex);
+    const json = await this.request(kind, 'POST', `/${this.resource(kind)}/generate`, body, keyIndex);
     // Create returns only { id, queuePosition } — no status field yet.
     return this.normalize(kind, json, 'pending');
   }
 
   async getGeneration(kind: GenerationKind, id: string, keyIndex = 0): Promise<ProviderGeneration> {
     const json = await this.request(
+      kind,
       'GET',
       `/${this.resource(kind)}/status/${encodeURIComponent(id)}`,
       undefined,
@@ -157,7 +172,10 @@ export class SixtyNineLabsClient {
    * correct across multiple machines without shared client state.
    */
   async getCredits(kind: GenerationKind, keyIndex = 0): Promise<ProviderCredits> {
-    const json = (await this.request('GET', '/models', undefined, keyIndex)) as Record<string, unknown>;
+    const json = (await this.request(kind, 'GET', '/models', undefined, keyIndex)) as Record<
+      string,
+      unknown
+    >;
     const section = (json?.[this.resource(kind)] ?? {}) as Record<string, unknown>;
     const credits = (section.credits ?? {}) as Record<string, unknown>;
     const models = Array.isArray(section.models) ? (section.models as Record<string, unknown>[]) : [];
@@ -193,7 +211,7 @@ export class SixtyNineLabsClient {
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       let res = await fetch(url, {
-        headers: { authorization: `Bearer ${this.keyAt(keyIndex)}` },
+        headers: { authorization: `Bearer ${this.keyAt(kind, keyIndex)}` },
         redirect: 'manual',
         signal: controller.signal,
       });
@@ -227,6 +245,7 @@ export class SixtyNineLabsClient {
   }
 
   private async request(
+    kind: GenerationKind,
     method: string,
     path: string,
     body?: unknown,
@@ -239,7 +258,7 @@ export class SixtyNineLabsClient {
         const res = await fetch(`${this.baseUrl}${path}`, {
           method,
           headers: {
-            authorization: `Bearer ${this.keyAt(keyIndex)}`,
+            authorization: `Bearer ${this.keyAt(kind, keyIndex)}`,
             'content-type': 'application/json',
             accept: 'application/json',
           },
@@ -347,17 +366,41 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Parse a comma-separated key list (each trimmed, blanks dropped). */
+function parseKeyCsv(csv: string | undefined): string[] {
+  return (
+    csv
+      ?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
 /**
  * Resolve the configured 69Labs key pool: the comma-separated
- * SIXTYNINE_LABS_API_KEYS if set (each trimmed, blanks dropped), else the single
- * SIXTYNINE_LABS_API_KEY. Always returns at least one key.
+ * SIXTYNINE_LABS_API_KEYS if set, else the single SIXTYNINE_LABS_API_KEY.
+ * Always returns at least one key. (Shared pool, media-agnostic.)
  */
 export function resolveApiKeys(): string[] {
-  const csv =
-    env.SIXTYNINE_LABS_API_KEYS?.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean) ?? [];
+  const csv = parseKeyCsv(env.SIXTYNINE_LABS_API_KEYS);
   return csv.length > 0 ? csv : [env.SIXTYNINE_LABS_API_KEY];
+}
+
+/**
+ * Resolve the per-media key pools. Each media type prefers its dedicated list
+ * (SIXTYNINE_LABS_IMAGE_KEYS / SIXTYNINE_LABS_VIDEO_KEYS); when unset it falls
+ * back to the shared pool (resolveApiKeys) — so with no per-media config both
+ * pools are identical and behavior is unchanged. This is what routes image jobs
+ * to image-funded accounts and video jobs to video-funded accounts.
+ */
+export function resolveApiKeyPools(): { image: string[]; video: string[] } {
+  const shared = resolveApiKeys();
+  const image = parseKeyCsv(env.SIXTYNINE_LABS_IMAGE_KEYS);
+  const video = parseKeyCsv(env.SIXTYNINE_LABS_VIDEO_KEYS);
+  return {
+    image: image.length > 0 ? image : shared,
+    video: video.length > 0 ? video : shared,
+  };
 }
 
 /**

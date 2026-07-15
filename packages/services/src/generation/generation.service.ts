@@ -48,9 +48,9 @@ abstract class SixtyNineLabsGenerationService implements GenerationService {
 
   constructor(protected readonly client: SixtyNineLabsClient = new SixtyNineLabsClient()) {}
 
-  /** Number of keys (accounts) in the pool. */
+  /** Number of keys (accounts) in THIS media kind's pool. */
   get keyCount(): number {
-    return this.client.keyCount;
+    return this.client.keyCountFor(this.kind);
   }
 
   /** Map our normalized request onto the fields this kind's endpoint accepts. */

@@ -246,16 +246,19 @@ function buildScenes(units: TranscriptUnit[], segScenes: SegmentScene[]): NewSce
     spans.push(...splitSpan(units, startIdx, endIdx, seg));
   }
 
-  // Pass 2: materialize each span. Visual type is assigned CONTENT-AWARE over the
-  // FINAL (post-split) list — images land on beats whose narration names a
-  // showable thing, spaced so the edit stays mixed (see assignVisualTypes).
+  // Pass 2: materialize each span. Visual type is assigned over the FINAL
+  // (post-split) list: each window hits a target video/image RATIO (more video
+  // early, less after VISUAL_TAPER_SEC — video credits are scarce), and image
+  // slots prefer beats whose narration names a showable thing (see
+  // assignVisualTypes). `sceneStarts` lets it pick the opening-vs-body ratio.
   const narrations = spans.map((span) =>
     units
       .slice(span.startIdx, span.endIdx + 1)
       .map((u) => u.text)
       .join(' '),
   );
-  const visualTypes = assignVisualTypes(narrations);
+  const sceneStarts = spans.map((span) => units[span.startIdx]!.start);
+  const visualTypes = assignVisualTypes(narrations, sceneStarts);
 
   return spans.map((span, i): NewScene => {
     const startSec = units[span.startIdx]!.start;

@@ -99,26 +99,108 @@ export function backgroundClipCountForDuration(displaySec: number): number {
  *   - VIDEO  = a full-frame video scene (69Labs video clip[s], full canvas).
  *   - IMAGE  = a full-frame IMAGE scene (one/several 69Labs stills, Ken Burns).
  *
- * Placement is now CONTENT-AWARE (client feedback: "images don't follow the
- * voiceover"): a scene becomes an IMAGE only when its narration NAMES something
- * showable (a product / object / tactile detail — `narrationHasProductBeat`), so
- * the still on screen matches what's being said. Spacing keeps the edit MIXED —
- * images are separated by at least `MIN_IMAGE_GAP_SCENES` video scenes, so
- * there's never a run of images and motion carries the narrative between them.
- * First/last are always video (stronger open/close). Beats that name nothing
- * showable stay video, so images only appear when they have something to depict.
+ * Placement balances TWO client directions:
+ *  1. VIDEO IS THE SCARCE RESOURCE (69Labs plans give far more image than video
+ *     credits), so we front-load video and taper it: more video in the opening,
+ *     less after the `VISUAL_TAPER_SEC` mark. Each window has a TARGET video
+ *     share (`VISUAL_MIX`) — the RATIO is the budget.
+ *  2. IMAGES MUST FOLLOW THE VOICEOVER (earlier feedback: "images don't follow
+ *     the narration"): within that budget we prefer to spend image slots on
+ *     beats whose narration NAMES something showable (`narrationHasProductBeat`).
+ *     If a window needs more images than there are product beats, we fall back to
+ *     positional fill so the target ratio is still met.
+ *
+ * Spacing keeps the edit MIXED — images are separated by at least
+ * `MIN_IMAGE_GAP_SCENES` video scenes, so there's never a run of images and
+ * motion carries the narrative between them. First/last are always video
+ * (stronger open/close).
  */
-const MIN_IMAGE_GAP_SCENES = 2;
+/**
+ * When the taper kicks in. Before this the OPENING sandwich runs; at/after it the
+ * BODY sandwich runs. Client spec: "first 5 minutes use more video, after 5
+ * minutes use less video."
+ */
+export const VISUAL_TAPER_SEC = 300;
 
-export function assignVisualTypes(narrations: readonly string[]): SceneVisualType[] {
+/**
+ * The repeating VIDEO/IMAGE sandwich per window, given verbatim by the client:
+ *   - opening (< 5 min): V-V-I-I  (50% video)
+ *   - body   (≥ 5 min):  V-I-I    (33% video)
+ * The pattern cycles across the window's scenes; index within the window mod the
+ * pattern length picks the base type. Content-awareness then refines WHICH scenes
+ * are images without changing the per-window COUNT (see assignVisualTypes).
+ */
+const V = SceneVisualType.VIDEO;
+const I = SceneVisualType.IMAGE;
+export const VISUAL_SANDWICH = {
+  opening: [V, V, I, I],
+  body: [V, I, I],
+} as const;
+
+/**
+ * Assign VIDEO/IMAGE per scene following the client's sandwich pattern, then
+ * refine placement so image slots prefer content-relevant beats.
+ *
+ * Two stages:
+ *  1. POSITIONAL sandwich — walk scenes in order, cycling the window's pattern
+ *     (opening vs body, chosen per scene by `sceneStarts` vs VISUAL_TAPER_SEC).
+ *     This fixes the per-window video/image RATIO exactly as the client specified.
+ *  2. CONTENT REFINEMENT — within each contiguous window, if the pattern marked a
+ *     scene as IMAGE whose narration names nothing showable while a nearby VIDEO
+ *     scene DOES (`narrationHasProductBeat`), swap the two. This keeps the COUNT
+ *     (and thus the video-credit budget) identical but moves stills onto beats
+ *     that have something to depict — honoring "images must follow the voiceover".
+ *
+ * First and last scenes are always VIDEO (stronger open/close). `sceneStarts` is
+ * optional; without it every scene uses the opening pattern.
+ */
+export function assignVisualTypes(
+  narrations: readonly string[],
+  sceneStarts?: readonly number[],
+): SceneVisualType[] {
   const n = narrations.length;
   const types: SceneVisualType[] = new Array(n).fill(SceneVisualType.VIDEO);
-  let lastImage = -Infinity;
+  if (n <= 2) return types; // 0-2 scenes: all video (open/close only)
+
+  const isBody = (i: number): boolean => (sceneStarts?.[i] ?? 0) >= VISUAL_TAPER_SEC;
+
+  // Stage 1: positional sandwich. Cycle each window's pattern over its own scenes
+  // (a separate counter per window so the taper boundary restarts the cadence).
+  // The pattern's first element is VIDEO, so scene 0 lands on video naturally and
+  // the whole-sequence ratio matches the pattern (no separate open/close override
+  // skewing the count). The last scene is nudged to VIDEO below only if needed.
+  let openingIdx = 0;
+  let bodyIdx = 0;
   for (let i = 0; i < n; i++) {
-    if (i === 0 || i === n - 1) continue; // open/close stay video
-    if (narrationHasProductBeat(narrations[i]!) && i - lastImage > MIN_IMAGE_GAP_SCENES) {
-      types[i] = SceneVisualType.IMAGE;
-      lastImage = i;
+    const pattern = isBody(i) ? VISUAL_SANDWICH.body : VISUAL_SANDWICH.opening;
+    const idx = isBody(i) ? bodyIdx++ : openingIdx++;
+    types[i] = pattern[idx % pattern.length]!;
+  }
+  // Strong open/close: guarantee first and last are VIDEO. The pattern already
+  // starts on VIDEO, so [0] is a no-op; [n-1] flips at most one scene.
+  types[0] = SceneVisualType.VIDEO;
+  types[n - 1] = SceneVisualType.VIDEO;
+
+  // Stage 2: content refinement within each window (count-preserving swaps).
+  // For an IMAGE scene with no product beat, hand its "image slot" to the nearest
+  // VIDEO scene in the same window that HAS one — the still then matches narration.
+  // Endpoints (0, n-1) are excluded as swap targets to keep open/close on video.
+  for (let i = 1; i < n - 1; i++) {
+    if (types[i] !== SceneVisualType.IMAGE) continue;
+    if (narrationHasProductBeat(narrations[i]!)) continue; // already relevant
+    for (let d = 1; d < n; d++) {
+      let swapped = false;
+      for (const j of [i - d, i + d]) {
+        if (j <= 0 || j >= n - 1) continue;
+        if (isBody(j) !== isBody(i)) continue; // stay within the same window
+        if (types[j] === SceneVisualType.VIDEO && narrationHasProductBeat(narrations[j]!)) {
+          types[i] = SceneVisualType.VIDEO;
+          types[j] = SceneVisualType.IMAGE;
+          swapped = true;
+          break;
+        }
+      }
+      if (swapped) break;
     }
   }
   return types;

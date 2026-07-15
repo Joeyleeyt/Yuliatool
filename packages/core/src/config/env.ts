@@ -60,6 +60,18 @@ const EnvSchema = z.object({
   // Leave unset to run on just SIXTYNINE_LABS_API_KEY (today's behavior).
   //   e.g. SIXTYNINE_LABS_API_KEYS="key_aaa,key_bbb,key_ccc"
   SIXTYNINE_LABS_API_KEYS: z.string().optional(),
+  // Optional PER-MEDIA key pools. 69Labs plans give far more IMAGE credits than
+  // VIDEO credits, so a single key is exhausted on video long before its image
+  // budget is spent. Dedicating separate keys per media type lets video (the
+  // scarce resource) get its own account(s) without wasting image budget, and
+  // more video keys can be added later purely for throughput. Comma-separated;
+  // when set, image jobs draw ONLY from IMAGE_KEYS and video jobs ONLY from
+  // VIDEO_KEYS. Each falls back (in order) to the shared SIXTYNINE_LABS_API_KEYS
+  // pool, then the single SIXTYNINE_LABS_API_KEY — so leaving these unset keeps
+  // today's behavior exactly.
+  //   e.g. SIXTYNINE_LABS_IMAGE_KEYS="vk_img_a" ; SIXTYNINE_LABS_VIDEO_KEYS="vk_vid_a,vk_vid_b"
+  SIXTYNINE_LABS_IMAGE_KEYS: z.string().optional(),
+  SIXTYNINE_LABS_VIDEO_KEYS: z.string().optional(),
   SIXTYNINE_LABS_BASE_URL: z.string().url().default('https://69labs.vip/api/v1'),
   // Optional model overrides. Unset -> the account's default model is used
   // (currently Veo 3.1 Lite for video). Some models (e.g. Veo) reject a
