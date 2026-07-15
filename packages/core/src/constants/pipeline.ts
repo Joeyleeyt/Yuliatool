@@ -124,8 +124,8 @@ export const VISUAL_TAPER_SEC = 300;
 
 /**
  * The repeating VIDEO/IMAGE sandwich per window, given verbatim by the client:
- *   - opening (< 5 min): V-V-I-I  (50% video)
- *   - body   (≥ 5 min):  V-I-I    (33% video)
+ *   - opening (< 5 min): V-V-I-I  → video:image = 5:5 (50% video)
+ *   - body   (≥ 5 min):  V-I-I    → video:image = 1:2 (33% video)
  * The pattern cycles across the window's scenes; index within the window mod the
  * pattern length picks the base type. Content-awareness then refines WHICH scenes
  * are images without changing the per-window COUNT (see assignVisualTypes).
@@ -136,6 +136,9 @@ export const VISUAL_SANDWICH = {
   opening: [V, V, I, I],
   body: [V, I, I],
 } as const;
+
+/** Target VIDEO fraction per window, matching the sandwich ratios above. */
+const VIDEO_FRACTION = { opening: 0.5, body: 1 / 3 } as const;
 
 /**
  * Assign VIDEO/IMAGE per scene following the client's sandwich pattern, then
@@ -164,22 +167,51 @@ export function assignVisualTypes(
 
   const isBody = (i: number): boolean => (sceneStarts?.[i] ?? 0) >= VISUAL_TAPER_SEC;
 
-  // Stage 1: positional sandwich. Cycle each window's pattern over its own scenes
-  // (a separate counter per window so the taper boundary restarts the cadence).
-  // The pattern's first element is VIDEO, so scene 0 lands on video naturally and
-  // the whole-sequence ratio matches the pattern (no separate open/close override
-  // skewing the count). The last scene is nudged to VIDEO below only if needed.
-  let openingIdx = 0;
-  let bodyIdx = 0;
+  // Stage 1: per-window ratio-exact placement.
+  // For each window (opening / body) take its scene indices, hold the FIRST and
+  // LAST scene of the WHOLE video as VIDEO (smooth bookends), then choose exactly
+  // `round(count * imageFraction)` of the window's MIDDLE scenes to be IMAGE,
+  // laid out on the sandwich pattern's image positions. Forcing the bookends does
+  // NOT inflate video: the image count is computed against the window size and
+  // filled from the interior, so the ratio stays on target (5:5 / 1:2).
+  const windows: Array<{ isBody: boolean; idxs: number[] }> = [];
   for (let i = 0; i < n; i++) {
-    const pattern = isBody(i) ? VISUAL_SANDWICH.body : VISUAL_SANDWICH.opening;
-    const idx = isBody(i) ? bodyIdx++ : openingIdx++;
-    types[i] = pattern[idx % pattern.length]!;
+    const body = isBody(i);
+    const last = windows[windows.length - 1];
+    if (last && last.isBody === body) last.idxs.push(i);
+    else windows.push({ isBody: body, idxs: [i] });
   }
-  // Strong open/close: guarantee first and last are VIDEO. The pattern already
-  // starts on VIDEO, so [0] is a no-op; [n-1] flips at most one scene.
-  types[0] = SceneVisualType.VIDEO;
-  types[n - 1] = SceneVisualType.VIDEO;
+  for (const w of windows) {
+    const videoFraction = w.isBody ? VIDEO_FRACTION.body : VIDEO_FRACTION.opening;
+    const imageTarget = Math.round(w.idxs.length * (1 - videoFraction));
+    // Candidate scenes that may become images: exclude the global first/last
+    // scene (kept VIDEO for smooth open/close).
+    const candidates = w.idxs.filter((i) => i !== 0 && i !== n - 1);
+    // Lay the sandwich pattern over the candidates IN ORDER so the rhythm reads
+    // V-V-I-I / V-I-I. Convert the pattern's IMAGE positions first (preserving
+    // cadence); if the exact ratio needs a few more images than the pattern's
+    // image slots (can happen when the bookends fall on the window edges), take
+    // the remaining VIDEO positions from the END backward so added images don't
+    // disturb the leading rhythm.
+    const pattern = w.isBody ? VISUAL_SANDWICH.body : VISUAL_SANDWICH.opening;
+    const patImageSlots: number[] = [];
+    const patVideoSlots: number[] = [];
+    candidates.forEach((i, k) => {
+      if (pattern[k % pattern.length] === I) patImageSlots.push(i);
+      else patVideoSlots.push(i);
+    });
+    let toPlace = imageTarget;
+    for (const i of patImageSlots) {
+      if (toPlace <= 0) break;
+      types[i] = SceneVisualType.IMAGE;
+      toPlace--;
+    }
+    for (const i of patVideoSlots.reverse()) {
+      if (toPlace <= 0) break;
+      types[i] = SceneVisualType.IMAGE;
+      toPlace--;
+    }
+  }
 
   // Stage 2: content refinement within each window (count-preserving swaps).
   // For an IMAGE scene with no product beat, hand its "image slot" to the nearest

@@ -138,13 +138,20 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `gentle hand and hair movement) — never a frozen pose, a still photograph, a faceless/headless ` +
     `body, floating clothes, or a fashion mannequin. Restate the anatomy count in the prompt ` +
     `(exactly one woman, two hands, five fingers each, anatomically correct).\n` +
-    `   ACTION — give her ONE meaningful primary action that connects to the narration, chosen from ` +
-    `the quiet-luxury rituals this channel lives in: pouring tea or coffee, arranging white peonies ` +
-    `in a vase, reading or writing in a journal, touching or folding silk/linen, lighting a candle, ` +
-    `holding a cup, adjusting a cuff or sleeve, opening curtains at the window. She performs it like ` +
-    `a professional actress: the action begins, completes, and then she SETTLES into a relaxed, ` +
-    `natural posture — not an endless repeating gesture. Never reduce her to "standing", "posing", ` +
-    `or "wearing a dress" — she is always DOING something, but only ONE thing.\n` +
+    `   ACTION — FOLLOW THE VOICEOVER FIRST (client's core requirement: the visual must show what ` +
+    `the narration is actually talking about). Read THIS scene's narration and give her ONE primary ` +
+    `action that DEPICTS the specific subject being spoken — the exact object, product, ritual, or ` +
+    `moment the words name. If the narration mentions a handbag, she is choosing/holding that ` +
+    `handbag; a skincare step → she is applying that product; a morning coffee → she is making that ` +
+    `coffee; a book/idea → she is reading that book. The on-screen subject must MATCH the words, not ` +
+    `a generic stand-in. ONLY when the narration is abstract and names nothing showable (a feeling, ` +
+    `an idea with no object) do you fall back to a neutral quiet-luxury ritual — pouring tea or ` +
+    `coffee, arranging white peonies in a vase, reading or writing in a journal, touching or folding ` +
+    `silk/linen, lighting a candle, holding a cup, adjusting a cuff, opening curtains at the window ` +
+    `— chosen to fit the narration's mood. She performs the action like a professional actress: it ` +
+    `begins, completes, and then she SETTLES into a relaxed, natural posture — not an endless ` +
+    `repeating gesture. Never reduce her to "standing", "posing", or "wearing a dress" — she is ` +
+    `always DOING the thing the narration is about, but only ONE thing.\n` +
     `   BED SCENES — if the beat is on or beside a bed, she is LYING DOWN (reclining on the ` +
     `bedding), NEVER standing on the bed. Her natural action there is to gently EMBRACE the bed — ` +
     `wrapping her arms around a pillow or the duvet, hugging the soft linens close while she rests ` +
@@ -172,10 +179,15 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `Avoid fabric or objects that float, morph, or move in physically impossible ways; any fabric ` +
     `motion is a light, natural settle.\n` +
     `2) IMAGE (the overlayPrompt field) — a FULL-FRAME, wide 16:9 still IMAGE that FILLS THE WHOLE ` +
-    `SCREEN, used as its own standalone scene (NOT a small window floated over video). It is a ` +
-    `clean, editorial luxury-lifestyle still in the SAME world, wardrobe, and warm grade as the ` +
-    `video scenes: a composed full-frame moment — a product/detail on a beautiful surface, a serene ` +
-    `interior, a tablescape, flowers, a textural close-up. Compose it edge-to-edge for a 16:9 frame ` +
+    `SCREEN, used as its own standalone scene (NOT a small window floated over video). It must ` +
+    `DEPICT THE SPECIFIC SUBJECT THIS SCENE'S NARRATION NAMES (client's core requirement: images ` +
+    `must follow the voiceover) — if the words are about a perfume, show THAT perfume; a piece of ` +
+    `jewelry, THAT piece; a dish, THAT dish; a destination, THAT place. It is a clean, editorial ` +
+    `luxury-lifestyle still in the SAME world, wardrobe, and warm grade as the video scenes: a ` +
+    `composed full-frame moment built around the narrated subject (that product/detail on a ` +
+    `beautiful surface, the serene interior being described, the specific tablescape, flowers, or ` +
+    `textural close-up the words evoke). Only when the narration names nothing concrete may it be a ` +
+    `neutral mood still that fits the beat. Compose it edge-to-edge for a 16:9 frame ` +
     `(NOT a centered object marooned in negative space). If a person appears, pin the anatomy count ` +
     `(exactly one woman, two hands, five fingers each, anatomically correct); prefer no hands unless ` +
     `the beat needs them. Provide a primary image and a SECOND, DIFFERENT full-frame composition of ` +
@@ -252,9 +264,11 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `Also, the BACKGROUND positivePrompt must read as PHOTOREALISTIC LIVE-ACTION footage on a real ` +
     `cinema camera (luxury commercial / Netflix-doc look — not AI art, a catalog still, or a ` +
     `mannequin). If a woman is present she is the primary subject: a real living adult, breathing, ` +
-    `blinking, with subtle continuous movement, performing ONE grounded narration-connected ritual ` +
-    `(pouring tea, arranging peonies, reading, touching silk, lighting a candle) — never merely ` +
-    `standing or posing, never a frozen still. On or beside a BED she is LYING DOWN and gently ` +
+    `blinking, with subtle continuous movement, performing ONE grounded action that DEPICTS THIS ` +
+    `SCENE'S NARRATED SUBJECT (show the exact object/product/moment the words name) — falling back to ` +
+    `a neutral ritual (pouring tea, arranging peonies, reading, touching silk, lighting a candle) ` +
+    `ONLY when the narration names nothing showable — never merely standing or posing, never a ` +
+    `frozen still. On or beside a BED she is LYING DOWN and gently ` +
     `hugging a pillow or the duvet with both arms (never standing on the bed, never a fingertip ` +
     `touch). Keep her action LOCAL and grounded (settled/reclined, not walking; ` +
     `natural reach); carry the rest of the motion with ambient camera, light, steam, a light ` +
