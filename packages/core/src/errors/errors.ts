@@ -131,3 +131,42 @@ export class RenderError extends AppError {
 export function isRetryable(err: unknown): boolean {
   return err instanceof AppError ? err.retryable : false;
 }
+
+/**
+ * Translate a raw failure (thrown error / provider string) into a clean,
+ * user-facing message for the UI. The raw text still goes to logs and the
+ * activity feed; this only shapes what an end user reads on a failed project.
+ *
+ * Ordered most-specific first. The 69Labs cases fold the technical
+ * `[69labs] POST /images/generate -> 403 {"error":"Insufficient credits",...}`
+ * dump into a plain-language explanation with the media type it applies to.
+ */
+export function userFacingFailureMessage(raw: string | undefined | null): string {
+  const text = raw ?? '';
+  const is69Labs = /\[69labs\]/i.test(text);
+  const isImage = /\/images\//i.test(text);
+  const isVideo = /\/videos\//i.test(text);
+  const media = isImage ? 'image' : isVideo ? 'video' : 'media';
+
+  // Hard "out of credits" (monthly plan quota exhausted) — not a transient window.
+  if (is69Labs && /insufficient credits/i.test(text)) {
+    return `The ${media} generation service (69Labs) has no credits left on the current plan. Top up or upgrade the account's monthly ${media} quota, then retry.`;
+  }
+  // Time-window quota ("Hourly/Daily ... credit limit exceeded") — resets on a clock boundary.
+  if (is69Labs && /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i.test(text)) {
+    return `The ${media} generation service (69Labs) hit a temporary usage limit that resets shortly. This will retry automatically — no action needed.`;
+  }
+  // Any other 69Labs 403/forbidden.
+  if (is69Labs && /\b403\b|forbidden/i.test(text)) {
+    return `The ${media} generation service (69Labs) rejected the request (access denied). Check the API key and account status, then retry.`;
+  }
+  // Remaining 69Labs failures — surface the service, not the raw HTTP dump.
+  if (is69Labs) {
+    return `The ${media} generation service (69Labs) failed to complete a request. Retry resumes from the last safe checkpoint.`;
+  }
+
+  // Unknown failure: keep it generic rather than leaking an internal stack/dump.
+  return raw && raw.trim().length > 0
+    ? raw
+    : 'A stage failed. Retry resumes from the last safe checkpoint — no double charges.';
+}

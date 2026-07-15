@@ -3,6 +3,7 @@ import {
   ProjectStateMachine,
   NotFoundError,
   ValidationError,
+  userFacingFailureMessage,
   R2_PREFIX,
   type CreateProjectInput,
   type UpdateProjectInput,
@@ -131,10 +132,13 @@ export class ProjectService {
 
   /** Move a project to FAILED from any active state, recording the cause. */
   async fail(id: string, error: { code: string; message: string }): Promise<ProjectRow> {
+    // Persist a clean, user-facing message for the UI; keep the raw technical
+    // message in the activity log (+ error data) for operators and debugging.
+    const userMessage = userFacingFailureMessage(error.message);
     const updated = await this.ctx.repos.projects.applyStatus(id, {
       status: ProjectStatus.FAILED,
       errorCode: error.code,
-      errorMessage: error.message,
+      errorMessage: userMessage,
       failedAt: new Date().toISOString(),
     });
     if (!updated) throw new NotFoundError('Project', id);
@@ -142,7 +146,7 @@ export class ProjectService {
       projectId: id,
       type: 'project_failed',
       message: error.message,
-      data: { code: error.code },
+      data: { code: error.code, userMessage },
     });
 
     // A failed production frees the single generation slot — promote the next
