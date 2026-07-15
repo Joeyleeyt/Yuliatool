@@ -1,19 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { Film, Sparkles } from 'lucide-react';
+import { Film, Sparkles, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
-import type { ProjectRow } from '@/lib/api/types';
+import type { ProjectListRow } from '@/lib/api/types';
 import { ProjectCard } from './project-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button, Skeleton } from '@/components/ui/primitives';
 import { stagger, fadeUp } from '@/components/ui/motion';
 
+const AUTOMATED_STEPS = [
+  'Transcribe',
+  'Understand the story',
+  'Write the screenplay',
+  'Design cinematic scenes',
+  'Generate AI footage',
+  'Edit',
+  'Color grade',
+  'Export MP4',
+];
+
 export function ProjectGrid({
   projects,
   isLoading,
 }: {
-  projects?: ProjectRow[] | undefined;
+  projects?: ProjectListRow[] | undefined;
   isLoading: boolean;
 }) {
   if (isLoading) {
@@ -36,13 +47,25 @@ export function ProjectGrid({
     return (
       <EmptyState
         icon={Film}
-        title="No productions yet"
-        description="Upload a voiceover and watch the AI studio direct your first cinematic film."
+        title="Create your first AI film."
+        description={
+          <>
+            <p>Upload one narration. We&apos;ll automatically:</p>
+            <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-left">
+              {AUTOMATED_STEPS.map((step) => (
+                <li key={step} className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 shrink-0 text-success" />
+                  {step}
+                </li>
+              ))}
+            </ul>
+          </>
+        }
         action={
           <Link href="/create">
             <Button variant="accent">
               <Sparkles className="h-4 w-4" />
-              Create your first video
+              Upload Narration
             </Button>
           </Link>
         }

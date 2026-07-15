@@ -6,12 +6,14 @@ import { api } from '@/lib/api/client';
 import type {
   Paginated,
   ProjectRow,
+  ProjectListRow,
   SceneView,
   AssetView,
   RenderView,
   StatusView,
   TranscriptRow,
   ActivityLogRow,
+  OwnerActivityRow,
   AnalysisRow,
   UploadTicket,
 } from '@/lib/api/types';
@@ -24,7 +26,7 @@ export function useProjects(params: { status?: string; search?: string } = {}) {
   if (params.search) qs.set('search', params.search);
   return useQuery({
     queryKey: ['projects', params],
-    queryFn: () => api<Paginated<ProjectRow>>(`/api/projects?${qs.toString()}`),
+    queryFn: () => api<Paginated<ProjectListRow>>(`/api/projects?${qs.toString()}`),
   });
 }
 
@@ -83,6 +85,14 @@ export function useActivity(id: string) {
   return useQuery({
     queryKey: ['activity', id],
     queryFn: () => api<{ activity: ActivityLogRow[] }>(`/api/projects/${id}/activity`),
+  });
+}
+
+/** Cross-project feed for the Studio dashboard's "Recent Activity" section. */
+export function useWorkspaceActivity() {
+  return useQuery({
+    queryKey: ['workspace-activity'],
+    queryFn: () => api<{ activity: OwnerActivityRow[] }>('/api/activity'),
   });
 }
 

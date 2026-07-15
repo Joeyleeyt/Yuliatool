@@ -66,16 +66,18 @@ export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDi
 }
 
 // --- Badge ------------------------------------------------------------------
-type Tone = 'neutral' | 'violet' | 'emerald' | 'amber' | 'red' | 'green' | 'blue';
+type Tone = 'neutral' | 'violet' | 'indigo' | 'emerald' | 'amber' | 'red' | 'green' | 'blue';
 const badgeTones: Record<Tone, string> = {
   neutral: 'bg-surface-3 text-fg-muted ring-1 ring-inset ring-line/10',
   violet: 'bg-accent/12 text-accent-soft ring-1 ring-inset ring-accent/25',
+  // Distinct from violet — used for the Rendering stage (brief's status palette).
+  indigo: 'bg-indigo-500/12 text-indigo-600 ring-1 ring-inset ring-indigo-500/25',
   emerald: 'bg-success/12 text-success ring-1 ring-inset ring-success/25',
   amber: 'bg-warning/12 text-warning ring-1 ring-inset ring-warning/25',
   red: 'bg-danger/12 text-danger ring-1 ring-inset ring-danger/25',
   // legacy aliases kept for existing imports
   green: 'bg-success/12 text-success ring-1 ring-inset ring-success/25',
-  blue: 'bg-accent/12 text-accent-soft ring-1 ring-inset ring-accent/25',
+  blue: 'bg-accent-2/12 text-accent-2 ring-1 ring-inset ring-accent-2/25',
 };
 
 export function Badge({

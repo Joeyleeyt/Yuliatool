@@ -1,23 +1,27 @@
 import type {
   ProjectRow,
+  ProjectListRow,
   SceneRow,
   PromptRow,
   AssetRow,
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
+  OwnerActivityRow,
   AnalysisRow,
 } from '@yulia/db';
 
 // Re-export row shapes as the API DTOs (server returns them directly).
 export type {
   ProjectRow,
+  ProjectListRow,
   SceneRow,
   PromptRow,
   AssetRow,
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
+  OwnerActivityRow,
   AnalysisRow,
 };
 

@@ -17,7 +17,7 @@ export function SidebarBody({ onNavigate }: { onNavigate?: (() => void) | undefi
       <Link href="/create" onClick={() => onNavigate?.()}>
         <Button variant="accent" className="w-full justify-start" size="md">
           <Sparkles className="h-4 w-4" />
-          Create Video
+          New Film
         </Button>
       </Link>
 

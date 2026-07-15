@@ -44,7 +44,7 @@ export function Hero() {
         <motion.div variants={fadeUp} className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
           <Link href="/create">
             <Button size="lg" className="min-w-44">
-              Create Video
+              New Film
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

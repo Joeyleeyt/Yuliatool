@@ -26,7 +26,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const items = useMemo<Item[]>(() => {
     const create: Item = {
       id: 'create',
-      label: 'Create Video',
+      label: 'New Film',
       kind: 'action',
       hint: 'Start a new production',
       icon: Sparkles,

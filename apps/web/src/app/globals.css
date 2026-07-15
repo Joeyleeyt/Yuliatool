@@ -12,7 +12,7 @@
   color-scheme: light;
 
   /* Surfaces — gallery canvas → pure-white cards → soft grey insets */
-  --bg: 247 248 250; /* #F7F8FA page canvas          */
+  --bg: 250 250 252; /* #FAFAFC page canvas          */
   --surface-1: 255 255 255; /* #FFFFFF floating cards       */
   --surface-2: 245 247 250; /* subtle inset / hover        */
   --surface-3: 238 241 245; /* deeper inset / nested       */
@@ -24,7 +24,7 @@
   --fg-subtle: 152 162 179; /* #98A2B3 tertiary / hints    */
 
   /* Semantic accents */
-  --accent: 109 94 248; /* #6D5EF8 violet — AI intelligence */
+  --accent: 108 99 255; /* #6C63FF violet — AI intelligence */
   --accent-soft: 138 126 250; /* lifted violet for gradients      */
   --accent-2: 79 140 255; /* #4F8CFF blue  — secondary accent */
   --success: 22 163 74; /* #16A34A emerald — completed      */

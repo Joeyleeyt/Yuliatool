@@ -20,7 +20,7 @@ export function CtaFooter() {
             </p>
             <Link href="/create" className="mt-8 inline-block">
               <Button size="lg" className="min-w-48">
-                Create Video
+                New Film
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>

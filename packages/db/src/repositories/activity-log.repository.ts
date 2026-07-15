@@ -9,6 +9,11 @@ export interface LogEntry {
   data?: Json;
 }
 
+/** An activity entry enriched with the production it belongs to (cross-project feed). */
+export interface OwnerActivityRow extends ActivityLogRow {
+  projectTitle: string;
+}
+
 /** Append-only; no BaseRepository (no updates/deletes by design). */
 export class ActivityLogRepository {
   constructor(private readonly sql: Sql) {}
@@ -29,6 +34,17 @@ export class ActivityLogRepository {
       select * from activity_logs
       where project_id = ${projectId}
       order by created_at desc
+      limit ${limit} offset ${offset}`;
+  }
+
+  /** Cross-project feed for the dashboard — every event across the owner's productions. */
+  async listByOwner(ownerId: string, limit = 50, offset = 0): Promise<OwnerActivityRow[]> {
+    return this.sql<OwnerActivityRow[]>`
+      select activity_logs.*, projects.title as "projectTitle"
+      from activity_logs
+      join projects on projects.id = activity_logs.project_id
+      where projects.owner_id = ${ownerId}
+      order by activity_logs.created_at desc
       limit ${limit} offset ${offset}`;
   }
 }

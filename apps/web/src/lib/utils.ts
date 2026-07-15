@@ -12,6 +12,15 @@ export function formatSeconds(sec: number | null | undefined): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/** "8m 42s" style runtime, used on production cards (Netflix/Frame.io poster convention). */
+export function formatDurationLong(sec: number | null | undefined): string | null {
+  if (sec == null) return null;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '—';
   const units = ['B', 'KB', 'MB', 'GB'];

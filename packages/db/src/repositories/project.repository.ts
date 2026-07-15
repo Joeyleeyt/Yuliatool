@@ -39,6 +39,12 @@ export interface ListParams {
   offset: number;
 }
 
+/** A project list row enriched with its most recent render's duration/fps, when one exists. */
+export interface ProjectListRow extends ProjectRow {
+  latestRenderDurationSec: number | null;
+  latestRenderFps: number | null;
+}
+
 export class ProjectRepository extends BaseRepository<ProjectRow> {
   constructor(sql: Sql) {
     super(sql, 'projects');
@@ -58,16 +64,29 @@ export class ProjectRepository extends BaseRepository<ProjectRow> {
     return rows[0] ?? null;
   }
 
-  async list(params: ListParams): Promise<{ items: ProjectRow[]; total: number }> {
+  async list(params: ListParams): Promise<{ items: ProjectListRow[]; total: number }> {
     const { ownerId, status, search, limit, offset } = params;
     const like = search ? `%${search}%` : null;
 
-    const items = await this.sql<ProjectRow[]>`
-      select * from projects
-      where owner_id = ${ownerId}
-      ${status ? this.sql`and status = ${status}` : this.sql``}
-      ${like ? this.sql`and title ilike ${like}` : this.sql``}
-      order by created_at desc
+    // Left-join-lateral the single most recent render per project so the list
+    // view can show real runtime (e.g. "8m 42s") without an N+1 per-project call.
+    const items = await this.sql<ProjectListRow[]>`
+      select
+        projects.*,
+        latest_render.duration_sec::float8 as "latestRenderDurationSec",
+        latest_render.fps as "latestRenderFps"
+      from projects
+      left join lateral (
+        select duration_sec, fps
+        from renders
+        where renders.project_id = projects.id
+        order by renders.created_at desc
+        limit 1
+      ) latest_render on true
+      where projects.owner_id = ${ownerId}
+      ${status ? this.sql`and projects.status = ${status}` : this.sql``}
+      ${like ? this.sql`and projects.title ilike ${like}` : this.sql``}
+      order by projects.created_at desc
       limit ${limit} offset ${offset}`;
 
     const countRows = await this.sql<{ count: string }[]>`

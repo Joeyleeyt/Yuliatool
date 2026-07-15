@@ -35,7 +35,7 @@ export function MarketingNav() {
             </Button>
           </Link>
           <Link href="/create">
-            <Button size="sm">Create Video</Button>
+            <Button size="sm">New Film</Button>
           </Link>
         </div>
       </div>

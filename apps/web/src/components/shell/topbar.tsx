@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Menu, Search } from 'lucide-react';
+import { Menu, Search, Loader2 } from 'lucide-react';
 import { Brand } from './brand';
 import { CommandPalette } from './command-palette';
 import { SignOutButton } from '@/components/auth/sign-out-button';
-import { Kbd } from '@/components/ui/primitives';
+import { Badge, Kbd } from '@/components/ui/primitives';
+import { useProjects } from '@/lib/query/hooks';
+
+// A production occupies the pipeline unless it's finished, failed, or not yet started.
+const IDLE_STATUSES = new Set(['completed', 'failed', 'created']);
 
 export function Topbar({
   userEmail,
@@ -16,6 +20,8 @@ export function Topbar({
 }) {
   const initial = (userEmail?.[0] ?? 'u').toUpperCase();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const { data } = useProjects();
+  const inProduction = data?.items.filter((p) => !IDLE_STATUSES.has(p.status)).length ?? 0;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -49,13 +55,19 @@ export function Topbar({
           className="hidden items-center gap-2 rounded-lg border border-line/10 bg-surface-1/60 px-3 py-1.5 text-sm text-fg-subtle transition-colors hover:border-line/20 hover:text-fg-muted lg:flex"
         >
           <Search className="h-3.5 w-3.5" />
-          <span>Search projects</span>
+          <span>Search productions...</span>
           <Kbd>⌘K</Kbd>
         </button>
 
         <div className="flex-1" />
 
         <div className="flex items-center gap-3">
+          {inProduction > 0 && (
+            <Badge tone="violet" className="hidden sm:inline-flex">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {inProduction} in production
+            </Badge>
+          )}
           <span className="hidden text-sm text-fg-subtle sm:inline">{userEmail}</span>
           <SignOutButton />
           <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-accent-soft to-accent text-xs font-semibold text-white">

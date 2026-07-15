@@ -9,7 +9,7 @@ import {
   type ProjectListQuery,
   type Paginated,
 } from '@yulia/core';
-import type { ProjectRow } from '@yulia/db';
+import type { ProjectRow, ProjectListRow, OwnerActivityRow } from '@yulia/db';
 import { purgeProject } from '@yulia/queue';
 import type { AppContext } from '../context.js';
 import { RecoveryService } from './recovery.service.js';
@@ -44,7 +44,7 @@ export class ProjectService {
     return project;
   }
 
-  async list(ownerId: string, query: ProjectListQuery): Promise<Paginated<ProjectRow>> {
+  async list(ownerId: string, query: ProjectListQuery): Promise<Paginated<ProjectListRow>> {
     const { items, total } = await this.ctx.repos.projects.list({
       ownerId,
       limit: query.limit,
@@ -53,6 +53,11 @@ export class ProjectService {
       ...(query.search ? { search: query.search } : {}),
     });
     return { items, total, limit: query.limit, offset: query.offset };
+  }
+
+  /** Cross-project activity feed for the dashboard — every event across the owner's productions. */
+  async activity(ownerId: string, limit = 50): Promise<OwnerActivityRow[]> {
+    return this.ctx.repos.activity.listByOwner(ownerId, limit, 0);
   }
 
   async update(id: string, ownerId: string, input: UpdateProjectInput): Promise<ProjectRow> {

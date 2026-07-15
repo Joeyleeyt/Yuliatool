@@ -22,7 +22,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'flex items-center gap-4 rounded-2xl border border-line/8 bg-surface-1 p-4 shadow-soft ring-hairline',
+        'flex items-center gap-4 rounded-2xl border border-line/8 bg-surface-1 p-4 shadow-soft ring-hairline transition-all duration-300 ease-premium hover:-translate-y-0.5 hover:shadow-lg',
         className,
       )}
     >
