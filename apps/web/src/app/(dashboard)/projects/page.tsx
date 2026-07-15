@@ -5,7 +5,6 @@ import { useProjects } from '@/lib/query/hooks';
 import { StudioHero } from '@/components/dashboard/studio-hero';
 import { ProjectGrid } from '@/components/dashboard/project-grid';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { WorkspaceActivity } from '@/components/dashboard/workspace-activity';
 import { FadeUp, motion, stagger, fadeUp } from '@/components/ui/motion';
 
 export default function ProjectsPage() {
@@ -61,8 +60,6 @@ export default function ProjectsPage() {
         </FadeUp>
         <ProjectGrid projects={projects} isLoading={isLoading} />
       </div>
-
-      <WorkspaceActivity />
     </div>
   );
 }

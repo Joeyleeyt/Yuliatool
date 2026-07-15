@@ -13,7 +13,6 @@ import type {
   StatusView,
   TranscriptRow,
   ActivityLogRow,
-  OwnerActivityRow,
   AnalysisRow,
   UploadTicket,
 } from '@/lib/api/types';
@@ -85,14 +84,6 @@ export function useActivity(id: string) {
   return useQuery({
     queryKey: ['activity', id],
     queryFn: () => api<{ activity: ActivityLogRow[] }>(`/api/projects/${id}/activity`),
-  });
-}
-
-/** Cross-project feed for the Studio dashboard's "Recent Activity" section. */
-export function useWorkspaceActivity() {
-  return useQuery({
-    queryKey: ['workspace-activity'],
-    queryFn: () => api<{ activity: OwnerActivityRow[] }>('/api/activity'),
   });
 }
 

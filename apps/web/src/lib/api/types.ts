@@ -7,7 +7,6 @@ import type {
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
-  OwnerActivityRow,
   AnalysisRow,
 } from '@yulia/db';
 
@@ -21,7 +20,6 @@ export type {
   TranscriptRow,
   RenderRow,
   ActivityLogRow,
-  OwnerActivityRow,
   AnalysisRow,
 };
 
