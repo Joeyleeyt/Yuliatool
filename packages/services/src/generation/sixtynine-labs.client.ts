@@ -154,6 +154,23 @@ export class SixtyNineLabsClient {
     return pool[((keyIndex % n) + n) % n]!;
   }
 
+  /**
+   * A SAFE identifier for the account a failure belongs to: which pool (video vs
+   * image), the slot within it, and a masked fingerprint of the key. Attached to
+   * provider errors so an operator can tell WHICH account to top up or fix —
+   * "Insufficient credits" is otherwise unactionable once more than one key is
+   * configured. NEVER include the raw key: errors are persisted to the DB, the
+   * activity feed, and rendered in the UI.
+   */
+  private keyLabel(kind: GenerationKind, keyIndex: number): string {
+    const pool = this.poolFor(kind);
+    const n = pool.length;
+    const slot = ((keyIndex % n) + n) % n;
+    const masked = maskKey(pool[slot]!);
+    const pos = n > 1 ? ` ${slot + 1}/${n}` : '';
+    return `${kind} key${pos} (${masked})`;
+  }
+
   /** URL path segment for a generation kind: 'videos' | 'images'. */
   private resource(kind: GenerationKind): string {
     return kind === 'video' ? 'videos' : 'images';
@@ -326,15 +343,29 @@ export class SixtyNineLabsClient {
           // 403 are transient (BullMQ retries them). An orphaned job is retryable
           // only because the caller clears the dead id first — the retry submits a
           // NEW job rather than re-polling the unreachable one.
-          throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
-            retryable:
-              res.status >= 500 ||
-              res.status === 429 ||
-              isConcurrencyLimit ||
-              isCreditLimit ||
-              isOrphanedJob,
-            ...(isOrphanedJob ? { context: { orphanedJob: true } } : {}),
-          });
+          // Name the failing account IN THE MESSAGE (masked — never the raw key).
+          // Only `message` survives the trip to the UI (run-processor passes just
+          // errorJson.message to ProjectService.fail), so a credit/auth error is
+          // otherwise unactionable once more than one key is configured: the
+          // operator can't tell which account to top up. `context` is kept for
+          // programmatic checks (isOrphanedJobError) that stay inside the worker.
+          const keyLabel = this.keyLabel(kind, keyIndex);
+          throw new ExternalServiceError(
+            '69labs',
+            `${method} ${path} [${keyLabel}] -> ${res.status} ${text}`,
+            {
+              retryable:
+                res.status >= 500 ||
+                res.status === 429 ||
+                isConcurrencyLimit ||
+                isCreditLimit ||
+                isOrphanedJob,
+              context: {
+                keyLabel,
+                ...(isOrphanedJob ? { orphanedJob: true } : {}),
+              },
+            },
+          );
         }
         return (await res.json()) as unknown;
       } catch (cause) {
@@ -414,6 +445,18 @@ function sleep(ms: number): Promise<void> {
  */
 export function isOrphanedJobError(err: unknown): boolean {
   return err instanceof AppError && err.context?.orphanedJob === true;
+}
+
+/**
+ * Mask an API key down to an identifying fingerprint: prefix + last 4 chars
+ * (`vk_uwUb…G1bR`). Enough for an operator to match it against the 69Labs
+ * dashboard or the configured env, never enough to authenticate with. Short or
+ * empty values collapse to a constant rather than exposing most of the key.
+ */
+function maskKey(key: string): string {
+  const k = key.trim();
+  if (k.length < 12) return '****';
+  return `${k.slice(0, 7)}…${k.slice(-4)}`;
 }
 
 /** Parse a comma-separated key list (each trimmed, blanks dropped). */

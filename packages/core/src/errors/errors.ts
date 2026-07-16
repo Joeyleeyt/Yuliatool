@@ -133,6 +133,17 @@ export function isRetryable(err: unknown): boolean {
 }
 
 /**
+ * Pull the masked account label the 69Labs client stamps into its error message
+ * (`... /videos/generate [video key 2/3 (vk_uwUb…G1bR)] -> 403 ...`). Returns
+ * null when absent — errors from before this was added, or non-69Labs failures.
+ * The label is already masked at the source; this never sees a raw key.
+ */
+function extractKeyLabel(text: string): string | null {
+  const m = /\[((?:video|image|media) key[^\]]*)\]/i.exec(text);
+  return m ? m[1]! : null;
+}
+
+/**
  * Translate a raw failure (thrown error / provider string) into a clean,
  * user-facing message for the UI. The raw text still goes to logs and the
  * activity feed; this only shapes what an end user reads on a failed project.
@@ -147,18 +158,23 @@ export function userFacingFailureMessage(raw: string | undefined | null): string
   const isImage = /\/images\//i.test(text);
   const isVideo = /\/videos\//i.test(text);
   const media = isImage ? 'image' : isVideo ? 'video' : 'media';
+  // Which account failed, e.g. "video key 2/3 (vk_uwUb…G1bR)". The client stamps
+  // this into the raw message (already masked); surfacing it tells the operator
+  // exactly WHICH key to top up or fix instead of leaving them to guess.
+  const key = extractKeyLabel(text);
+  const onKey = key ? ` — on ${key}` : '';
 
   // Hard "out of credits" (monthly plan quota exhausted) — not a transient window.
   if (is69Labs && /insufficient credits/i.test(text)) {
-    return `The ${media} generation service (69Labs) has no credits left on the current plan. Top up or upgrade the account's monthly ${media} quota, then retry.`;
+    return `The ${media} generation service (69Labs) has no credits left${onKey}. Top up or upgrade that account's monthly ${media} quota, then retry.`;
   }
   // Time-window quota ("Hourly/Daily ... credit limit exceeded") — resets on a clock boundary.
   if (is69Labs && /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i.test(text)) {
-    return `The ${media} generation service (69Labs) hit a temporary usage limit that resets shortly. This will retry automatically — no action needed.`;
+    return `The ${media} generation service (69Labs) hit a temporary usage limit that resets shortly${onKey}. This will retry automatically — no action needed.`;
   }
   // Any other 69Labs 403/forbidden.
   if (is69Labs && /\b403\b|forbidden/i.test(text)) {
-    return `The ${media} generation service (69Labs) rejected the request (access denied). Check the API key and account status, then retry.`;
+    return `The ${media} generation service (69Labs) rejected the request (access denied)${onKey}. Check that API key and its account status, then retry.`;
   }
   // Remaining 69Labs failures — surface the service, not the raw HTTP dump.
   if (is69Labs) {
