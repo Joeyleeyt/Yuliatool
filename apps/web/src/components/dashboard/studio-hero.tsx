@@ -37,7 +37,7 @@ export function StudioHero() {
       <div className="relative flex flex-col items-start gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-xl">
           <motion.p variants={fadeUp} className="text-sm font-medium text-fg-muted">
-            {greeting()} Yulia.
+            {greeting() + ' Yulia.'} 
           </motion.p>
           <motion.h1
             variants={fadeUp}
