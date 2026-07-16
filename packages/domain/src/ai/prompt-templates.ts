@@ -24,8 +24,11 @@ export function analysisUser(fullText: string): string {
     `emotion and intensity 0..1); recurring visual motifs; a style guide (palette, lighting, ` +
     `camera language, mood, wardrobe, setting) consistent with the house style; a prompt ` +
     `strategy (guidance plus do/avoid lists) tuned for a cinematic text-to-video/image model; ` +
-    `and continuity anchors that MUST persist across every scene (the woman's appearance, key ` +
-    `locations, signature objects).`
+    `and continuity anchors that MUST persist across every scene. IMPORTANT: anchors describe the ` +
+    `woman's IDENTITY only (her face, hair, age, refined grooming) plus the overall warm film grade ` +
+    `— NOT a fixed location or outfit. The environment, wardrobe, background, and colors are meant ` +
+    `to CHANGE per scene to follow the narration, so do NOT lock a single room, setting, or outfit ` +
+    `as an anchor.`
   );
 }
 
@@ -87,9 +90,12 @@ export function segmentationUser(
     `10-minute video should yield roughly 30-38 scenes. (Any scene longer than ` +
     `${SEGMENT_WINDOW_SEC.split}s is automatically split downstream, so keep them tight.)\n\n` +
     `For each scene give: title, summary, visualIntent, subject, environment, mood, and ` +
-    `continuityNotes that explicitly reference the anchors so the sequence stays visually ` +
-    `consistent. Group scenes that belong to the same topic under the SAME title so the ` +
-    `pipeline can number them as one listicle item. Each scene must be visually self-contained.`
+    `continuityNotes. The ENVIRONMENT must be chosen from THIS scene's narration and should VARY ` +
+    `from neighbouring scenes (a new, fitting location per beat — avoid repeating one room); the ` +
+    `subject/visualIntent should depict what the narration actually names. continuityNotes carry ` +
+    `only the woman's identity and the warm grade forward (NOT a fixed room or outfit). Group scenes ` +
+    `that belong to the same topic under the SAME title so the pipeline can number them as one ` +
+    `listicle item. Each scene must be visually self-contained.`
   );
 }
 
@@ -114,6 +120,14 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
     `keep at most ONE person's hands in any close shot. Prefer showing the product with NO hands ` +
     `at all when hands aren't essential.\n\n` +
+    `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
+    `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
+    `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +
+    `quiet-luxury FILM GRADE. EVERYTHING ELSE must actively CHANGE from scene to scene to match each ` +
+    `beat's narration: the ENVIRONMENT/location, the BACKGROUND and its dominant COLORS, her ` +
+    `WARDROBE/outfit, and her ACTION. Consecutive scenes must look visibly DIFFERENT — a new place, ` +
+    `often a new outfit suited to that place, and a different action. Do NOT reuse the previous ` +
+    `scene's room, outfit, or color scheme unless the narration explicitly continues the same moment.\n\n` +
     `STORY-FIRST ENVIRONMENT — choose each scene's LOCATION from the MEANING of the narration, not ` +
     `by defaulting to a bedroom/living-room/sofa. Ask: what is being discussed, what emotion, and ` +
     `where would this naturally happen? Then set the scene THERE. E.g. a morning routine → elegant ` +
@@ -183,8 +197,10 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `DEPICT THE SPECIFIC SUBJECT THIS SCENE'S NARRATION NAMES (client's core requirement: images ` +
     `must follow the voiceover) — if the words are about a perfume, show THAT perfume; a piece of ` +
     `jewelry, THAT piece; a dish, THAT dish; a destination, THAT place. It is a clean, editorial ` +
-    `luxury-lifestyle still in the SAME world, wardrobe, and warm grade as the video scenes: a ` +
-    `composed full-frame moment built around the narrated subject (that product/detail on a ` +
+    `luxury-lifestyle still that keeps the SAME woman's identity and the warm film grade, but whose ` +
+    `SETTING, SURFACES, WARDROBE, and COLORS match THIS beat's narration (not a repeat of the ` +
+    `previous scene's world): a composed full-frame moment built around the narrated subject (that ` +
+    `product/detail on a ` +
     `beautiful surface, the serene interior being described, the specific tablescape, flowers, or ` +
     `textural close-up the words evoke). Only when the narration names nothing concrete may it be a ` +
     `neutral mood still that fits the beat. Compose it edge-to-edge for a 16:9 frame ` +
@@ -228,8 +244,12 @@ export interface ScenePromptContext {
 export function scenePromptUser(c: ScenePromptContext): string {
   const prev = c.previous
     ? `PREVIOUS SCENE ("${c.previous.title}") prompt was:\n${c.previous.positivePrompt}\n` +
-      `Maintain visual continuity with it (same woman, wardrobe, world, grade).`
-    : `This is the opening scene — establish the look that later scenes will follow.`;
+      `Continuity means the SAME WOMAN (same face, hair, age, refined look) and the same warm ` +
+      `film grade — NOT the same room or outfit. This scene's ENVIRONMENT, WARDROBE, BACKGROUND, ` +
+      `COLORS, and ACTION must CHANGE to match THIS scene's narration (see below); do not simply ` +
+      `repeat the previous scene's setting or clothing.`
+    : `This is the opening scene — establish the woman's look (identity + grade) that later scenes ` +
+      `keep, while each later scene's setting, wardrobe, and action shift to follow its narration.`;
   const next = c.next
     ? `NEXT SCENE ("${c.next.title}"): ${c.next.summary}. Compose so the cut into it feels natural.`
     : `This is the final scene — give it a sense of resolution.`;
