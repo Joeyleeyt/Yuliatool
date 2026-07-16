@@ -6,6 +6,7 @@ import {
   ValidationError,
   ScenePromptSchema,
   PIP_LAYOUT,
+  assignImageWithWoman,
   env,
   type ScenePromptOutput,
 } from '@yulia/core';
@@ -58,7 +59,14 @@ export class PromptGenerationService {
     const promptStrategyJson = JSON.stringify(analysis.prompt_strategy);
     const anchors = extractAnchors(analysis.continuity_memory);
 
-    const shared = { styleGuideJson, promptStrategyJson, anchors, total: scenes.length };
+    // Deterministically pick ~30% of the IMAGE scenes to FEATURE THE WOMAN (with
+    // the object) instead of the object alone — client asked for more images with
+    // women, since they were coming out object-only. Computed once over the whole
+    // ordered scene list so the flagged stills are evenly spread, then each
+    // scene's flag rides into its prompt.
+    const imageWithWoman = assignImageWithWoman(scenes.map((s) => s.visual_type));
+
+    const shared = { styleGuideJson, promptStrategyJson, anchors, total: scenes.length, imageWithWoman };
 
     this.ctx.logger.info(
       { projectId, scenes: scenes.length, concurrency: env.PROMPT_GENERATION_CONCURRENCY },
@@ -83,7 +91,13 @@ export class PromptGenerationService {
     projectId: string,
     scenes: SceneRow[],
     i: number,
-    shared: { styleGuideJson: string; promptStrategyJson: string; anchors: string[]; total: number },
+    shared: {
+      styleGuideJson: string;
+      promptStrategyJson: string;
+      anchors: string[];
+      total: number;
+      imageWithWoman: boolean[];
+    },
   ): Promise<void> {
     const scene = scenes[i]!;
     const prevScene = scenes[i - 1] ?? null;
@@ -127,6 +141,9 @@ export class PromptGenerationService {
         },
         previous,
         next: next ? { title: next.title ?? '', summary: next.summary ?? '' } : null,
+        // This IMAGE scene's still should feature the woman with the object
+        // (rather than the object alone) — see assignImageWithWoman.
+        imageFeaturesWoman: shared.imageWithWoman[i] ?? false,
       }),
       temperature: 0.6,
       seed: seedFrom(projectId, scene.id),

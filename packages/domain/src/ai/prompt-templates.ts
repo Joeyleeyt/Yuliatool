@@ -206,7 +206,10 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `neutral mood still that fits the beat. Compose it edge-to-edge for a 16:9 frame ` +
     `(NOT a centered object marooned in negative space). If a person appears, show her FULL BODY — ` +
     `an elegant full-length, head-to-toe editorial shot (wide/medium-wide, including her from head ` +
-    `to feet), with the narrated object present and readable in the scene. Pin the anatomy count ` +
+    `to feet) in which she is ACTIVELY connected to the EXACT object this scene's narration names — ` +
+    `holding, using, wearing, or presenting that specific object (not a generic prop, not a vague ` +
+    `background item) so the object and the woman clearly belong to the same beat and the object ` +
+    `stays readable and in focus. Pin the anatomy count ` +
     `(exactly one woman, full body, head to toe, two hands, five fingers each, two feet, correct ` +
     `natural human proportions, anatomically correct); keep exactly one person in frame. Provide a ` +
     `primary image and a SECOND, DIFFERENT full-frame composition of ` +
@@ -283,22 +286,35 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `appear; keep at most one person's hands in a close shot.\n\n` +
     `Write, for the BACKGROUND video: positivePrompt (one dense cinematic paragraph), ` +
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
-    `Then, for the IMAGE: overlayPrompt — a FULL-FRAME 16:9 editorial luxury still built around the ` +
-    `SPECIFIC OBJECT THIS SCENE'S NARRATION NAMES (that product / detail / dish / place), which stays ` +
-    `the clear FOCAL POINT and hero. ` +
+    `Then, for the IMAGE: overlayPrompt — a FULL-FRAME 16:9 editorial luxury still that MUST FOLLOW ` +
+    `THIS SCENE'S VOICEOVER (client's core requirement): whatever the narration is talking about in ` +
+    `this beat is what the image shows. Read the Narration above and depict ITS actual content — ` +
+    `if it names an object/product/dish, show THAT exact object as the hero; if it describes a place, ` +
+    `show THAT place; if it describes an action or ritual, show THAT action; if it conveys a feeling ` +
+    `or idea with nothing concrete, show a mood still that visibly matches that idea. The image must ` +
+    `never be a generic luxury filler that ignores the words — a viewer hearing the voiceover should ` +
+    `recognise the image as the SAME subject. When the beat names a concrete object it stays the ` +
+    `clear FOCAL POINT and hero. ` +
     (c.imageFeaturesWoman
       ? `FOR THIS IMAGE, FEATURE THE SAME WOMAN together WITH the object (do NOT show the object ` +
         `alone) — the client wants more images that include a person, not only objects.\n` +
+        `   OBJECT-WOMAN MATCH (critical) — the object with her must be the EXACT object THIS ` +
+        `scene's narration names (the same product / detail the object-only images would show), ` +
+        `and she must be ACTIVELY CONNECTED to it, not just near it: she is holding, using, ` +
+        `wearing, or presenting THAT specific object so the viewer instantly reads "this woman ` +
+        `with this object". Name the object explicitly in the prompt and make it clearly ` +
+        `readable and in-focus; do NOT substitute a generic prop or leave the object as a vague ` +
+        `background item. The object and the woman must obviously belong to the same beat.\n` +
         `   FRAMING (critical) — show her FULL BODY, head-to-toe, in an elegant full-length ` +
         `editorial shot within the setting the beat describes (a wide/medium-wide composition that ` +
-        `includes her from head to feet, standing or seated naturally). She is the same real, ` +
-        `living, naturally proportioned adult woman (not a mannequin, not a frozen pose), posed ` +
-        `elegantly WITH the narrated object present and clearly readable in the scene (she is ` +
-        `holding/using it, or it sits prominently beside her). Keep it a poised, high-end fashion ` +
-        `full-body look. Pin the anatomy: "exactly one woman, full body, head to toe, two hands, ` +
-        `five fingers per hand, two feet, correct natural human proportions, anatomically correct"; ` +
-        `keep exactly one person in frame so nothing can fuse into an impossible body. Staged in ` +
-        `beautiful editorial light, composed edge-to-edge for the 16:9 frame.\n` +
+        `includes her from head to feet, standing or seated naturally) WHILE the narrated object ` +
+        `stays clearly visible and connected to her. She is the same real, living, naturally ` +
+        `proportioned adult woman (not a mannequin, not a frozen pose), posed elegantly. Keep it a ` +
+        `poised, high-end fashion full-body look. Pin the anatomy: "exactly one woman, full body, ` +
+        `head to toe, two hands, five fingers per hand, two feet, correct natural human ` +
+        `proportions, anatomically correct"; keep exactly one person in frame so nothing can fuse ` +
+        `into an impossible body. Staged in beautiful editorial light, composed edge-to-edge for ` +
+        `the 16:9 frame.\n` +
         `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME beat ` +
         `(another angle / staging) that the gallery rotates to on longer scenes — it MAY show the ` +
         `object alone for variety — or null if one image is enough.\n\n`

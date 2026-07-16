@@ -40,18 +40,51 @@ function personaFor(type: string): { name: string; icon: LucideIcon } {
   return { name: 'Studio', icon: Sparkles };
 }
 
-function statusFor(type: string): Status {
-  const t = type.toLowerCase();
+/**
+ * Badge status for a logged event. Activity entries are APPEND-ONLY records of
+ * things that ALREADY happened, so a past event is never "Working" — the only
+ * reason a stage-transition row (`status_changed`, message "rendering →
+ * completed") used to show Working was that its `type` matched none of the
+ * done-keywords and fell through to the 'active' default. Treat a completed
+ * transition as done (or error, when it moved INTO a failed/terminal state),
+ * reading the destination from `data.to` when present.
+ */
+function statusFor(row: ActivityLogRow): Status {
+  const t = row.type.toLowerCase();
+  // Explicit failure events.
   if (t.includes('fail') || t.includes('error')) return 'error';
+
+  // Stage transitions carry the destination state in data.to (or the message
+  // "from → to"). A transition INTO 'failed' is an error; any other completed
+  // transition is done — it is a historical fact, not in-progress work.
+  const to = extractTo(row);
+  if (to) {
+    if (to.includes('fail') || to.includes('error')) return 'error';
+    return 'done';
+  }
+
   if (
     t.includes('complete') ||
     t.includes('done') ||
     t.includes('stored') ||
     t.includes('ready') ||
-    t.includes('success')
+    t.includes('success') ||
+    t.includes('changed') || // status_changed: a completed transition
+    t.includes('resumed') ||
+    t.includes('created')
   )
     return 'done';
   return 'active';
+}
+
+/** Read the destination stage of a transition event from data.to, else the
+ * "from → to" message tail. Returns a lowercased state, or null if not a
+ * transition. */
+function extractTo(row: ActivityLogRow): string | null {
+  const data = row.data as { to?: unknown } | null | undefined;
+  if (data && typeof data.to === 'string') return data.to.toLowerCase();
+  const m = row.message?.match(/→\s*([a-z_]+)\s*$/i);
+  return m ? m[1]!.toLowerCase() : null;
 }
 
 const medallion: Record<Status, string> = {
@@ -92,7 +125,7 @@ export function ActivityLog({ items }: { items: ActivityLogRow[] }) {
       <div className="max-h-[480px] overflow-y-auto p-4">
         {ordered.map((a, i) => {
           const persona = personaFor(a.type);
-          const status = statusFor(a.type);
+          const status = statusFor(a);
           const PersonaIcon = persona.icon;
           const StatusIcon = statusIcon[status];
           const last = i === ordered.length - 1;

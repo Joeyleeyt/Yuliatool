@@ -239,6 +239,49 @@ export function assignVisualTypes(
 }
 
 /**
+ * Target fraction of IMAGE scenes that FEATURE THE WOMAN (with the narrated
+ * object) rather than showing the object alone. Client direction: "for the
+ * images, can we have more with women? For now it's only objects — maybe 30%."
+ * The object stays the hero in these shots; the woman is present but supporting.
+ */
+export const IMAGE_WITH_WOMAN_FRACTION = 0.3;
+
+/**
+ * Decide, deterministically, which IMAGE scenes should feature the woman (vs the
+ * object alone), so ~`IMAGE_WITH_WOMAN_FRACTION` of the video's stills include a
+ * person and they're EVENLY SPREAD across the timeline (not clustered). Mirrors
+ * how `assignVisualTypes` fixes the video/image ratio by count rather than
+ * leaving it to the model, which — with only a vague "some images" instruction —
+ * defaulted to object-only every time (the client's complaint).
+ *
+ * `visualTypes` is the per-scene type from `assignVisualTypes` (in scene order).
+ * Returns a boolean per scene, aligned by index: `true` = this IMAGE scene
+ * should feature the woman. Non-IMAGE scenes are always `false`. The chosen
+ * count is `round(imageCount * fraction)`; the flags are spaced by walking the
+ * IMAGE scenes and flagging every `stride`-th one, so a 10-image video gets 3
+ * woman-images at roughly positions 2, 5, 8 rather than the first 3.
+ */
+export function assignImageWithWoman(
+  visualTypes: readonly SceneVisualType[],
+  fraction: number = IMAGE_WITH_WOMAN_FRACTION,
+): boolean[] {
+  const flags = visualTypes.map(() => false);
+  const imageIdxs = visualTypes
+    .map((t, i) => (t === SceneVisualType.IMAGE ? i : -1))
+    .filter((i) => i >= 0);
+  const want = Math.round(imageIdxs.length * fraction);
+  if (want <= 0) return flags;
+  // Even spread: pick `want` of the `imageIdxs` at fractional stride, centering
+  // each pick in its slice so the flagged stills aren't bunched at the start.
+  const stride = imageIdxs.length / want;
+  for (let k = 0; k < want; k++) {
+    const pick = imageIdxs[Math.min(imageIdxs.length - 1, Math.floor((k + 0.5) * stride))]!;
+    flags[pick] = true;
+  }
+  return flags;
+}
+
+/**
  * Gallery cadence: roughly one fresh still every this many seconds of on-screen
  * time. A held IMAGE scene rotates through several distinct stills instead of
  * holding one frame. A 60s image hold → ~5 stills.

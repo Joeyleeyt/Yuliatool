@@ -59,6 +59,9 @@ export const HOUSE_STYLE = {
     'disfigured hands, distorted hands, bad hands, extra body parts, conjoined limbs, ' +
     'floating hand, disembodied hand, bad anatomy, deformed anatomy, malformed anatomy, ' +
     'anatomically incorrect, distorted face, deformed face, extra head, ' +
+    // legs/feet — reinforced because ~30% of stills are now full-body (head-to-toe)
+    'extra legs, third leg, duplicated legs, extra feet, malformed feet, deformed feet, ' +
+    'distorted legs, elongated legs, fused legs, missing feet, bad proportions, ' +
     // --- generic quality ---
     'lowres, blurry, deformed, disfigured, watermark, text, logo, cartoon, cgi look, ' +
     'plastic skin, oversaturated, harsh flash, cluttered background, amateur, ' +
