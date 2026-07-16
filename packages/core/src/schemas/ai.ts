@@ -78,13 +78,15 @@ export const ScenePromptSchema = z.object({
   lighting: z.string(),
   motion: z.string(),
   colorPalette: z.array(z.string()),
-  // Overlay: portrait detail/product still (4:5) that complements the
-  // background — same world, wardrobe, and grade, tighter framing.
+  // IMAGE (field name kept for schema-migration reasons): a FULL-FRAME 16:9
+  // editorial still built around the narrated object (the hero/focal point).
+  // Usually the object alone; some beats include the same woman WITH the object,
+  // object-focused (she stays secondary). Same identity + warm grade.
   overlayPrompt: z.string(),
   overlayNegativePrompt: z.string(),
-  // Optional SECOND overlay for longer scenes: a DIFFERENT complementary detail
-  // (another angle/object in the same world) that the overlay window rotates to
-  // mid-scene. Used only when the scene is long enough for two overlay slots.
+  // Optional SECOND full-frame still for longer scenes: a DIFFERENT composition
+  // of the same object (another angle/staging, may swap object-only <-> object+woman)
+  // that the gallery rotates to mid-scene. Used only when the scene is long enough.
   // Strict json_schema mode requires every property present -> nullable, not
   // optional (see file header); the model returns null when it has nothing to add.
   overlayPrompt2: z.string().nullable(),

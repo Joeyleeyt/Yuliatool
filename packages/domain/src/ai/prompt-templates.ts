@@ -273,14 +273,23 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `appear; keep at most one person's hands in a close shot.\n\n` +
     `Write, for the BACKGROUND video: positivePrompt (one dense cinematic paragraph), ` +
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
-    `Then, for the OVERLAY window: overlayPrompt — a portrait 4:5 CLEAN, ISOLATED PRODUCT STILL: ` +
-    `the single hero object BY ITSELF on a simple luxury surface (silk / marble / velvet / linen) ` +
-    `with negative space and editorial studio light, showing NO hands and NO person by default ` +
-    `(a bare product), so it cannot fuse with the background's hands into an impossible body. Only ` +
-    `add a hand if the beat truly needs it, and then pin "exactly one hand, five fingers, ` +
-    `anatomically correct". Also provide overlayPrompt2: a SECOND, DIFFERENT clean product angle ` +
-    `or detail of the same object (still bare, no hands, not a repeat) that the window rotates to ` +
-    `on longer scenes — set it to null if this scene only needs one overlay.\n\n` +
+    `Then, for the IMAGE: overlayPrompt — a FULL-FRAME 16:9 editorial luxury still built around the ` +
+    `SPECIFIC OBJECT THIS SCENE'S NARRATION NAMES (that product / detail / dish / place), which stays ` +
+    `the clear FOCAL POINT. The object is always the hero; the woman may or may not appear:\n` +
+    `   • DEFAULT (most images) — the hero object BY ITSELF, beautifully staged on a luxury surface ` +
+    `(silk / marble / velvet / linen) with editorial light and composed edge-to-edge for the 16:9 ` +
+    `frame (NOT marooned in negative space, NOT a centered dot). No hands, no person.\n` +
+    `   • SOME images — include the SAME woman WITH the object, but keep the OBJECT the focus: she is ` +
+    `secondary and supporting (softly out of focus, cropped, from behind/over-the-shoulder, or her ` +
+    `hands presenting the object) while the narrated object is sharp and foreground. Pick this only ` +
+    `when it makes the beat feel more human/lived-in; otherwise use the object-only default. When she ` +
+    `appears, pin the anatomy: "exactly one woman, exactly two hands, five fingers per hand, ` +
+    `anatomically correct"; keep at most one person's hands in frame so nothing can fuse into an ` +
+    `impossible body.\n` +
+    `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME object ` +
+    `(another angle / detail / staging, not a repeat) that the gallery rotates to on longer scenes — ` +
+    `if the primary shows the object alone, the alternate MAY be the object-with-woman variant (or ` +
+    `vice-versa) to add variety — set it to null if this scene only needs one image.\n\n` +
     `Also, the BACKGROUND positivePrompt must read as PHOTOREALISTIC LIVE-ACTION footage on a real ` +
     `cinema camera (luxury commercial / Netflix-doc look — not AI art, a catalog still, or a ` +
     `mannequin). If a woman is present she is the primary subject: a real living adult, breathing, ` +
