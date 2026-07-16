@@ -68,16 +68,35 @@ export class PromptGenerationService {
 
     const shared = { styleGuideJson, promptStrategyJson, anchors, total: scenes.length, imageWithWoman };
 
+    // RESUME: skip scenes that already have a prompt. `mapLimit` rejects on the
+    // first error, so ONE scene's transient failure (e.g. an OpenAI TPM 429 on a
+    // long video) fails the whole batched job — and without this check the retry
+    // would re-prompt ALL scenes from scratch, burning ~20 minutes and a fresh
+    // round of tokens, which trips the rate limit again and can loop. Prompting is
+    // per-scene independent, so a retry only needs the scenes still missing one.
+    const prompted = new Set(
+      (await this.ctx.repos.prompts.listActiveByProject(projectId)).map((p) => p.scene_id),
+    );
+    const pending = scenes.filter((s) => !prompted.has(s.id));
+
     this.ctx.logger.info(
-      { projectId, scenes: scenes.length, concurrency: env.PROMPT_GENERATION_CONCURRENCY },
+      {
+        projectId,
+        scenes: scenes.length,
+        pending: pending.length,
+        skipped: scenes.length - pending.length,
+        concurrency: env.PROMPT_GENERATION_CONCURRENCY,
+      },
       'generating scene prompts (openai, batched)',
     );
 
-    // Run scenes with bounded concurrency. Each scene is independent: continuity
-    // comes from the shared style guide + anchors + static neighbor summaries,
-    // not from other scenes' generated prompts.
-    await mapLimit(scenes, env.PROMPT_GENERATION_CONCURRENCY, (_scene, i) =>
-      this.promptScene(projectId, scenes, i, shared),
+    // Run the still-missing scenes with bounded concurrency. Each scene is
+    // independent: continuity comes from the shared style guide + anchors + static
+    // neighbor summaries, not from other scenes' generated prompts. Index by the
+    // scene's position in the FULL list so neighbor context stays correct.
+    const indexOf = new Map(scenes.map((s, i) => [s.id, i]));
+    await mapLimit(pending, env.PROMPT_GENERATION_CONCURRENCY, (scene) =>
+      this.promptScene(projectId, scenes, indexOf.get(scene.id)!, shared),
     );
 
     await this.projects.transition(projectId, ProjectStatus.VIDEO_GENERATION);
