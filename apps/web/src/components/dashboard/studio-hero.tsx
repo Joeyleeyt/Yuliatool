@@ -5,7 +5,13 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button, IconTile } from '@/components/ui/primitives';
 import { fadeUp, stagger } from '@/components/ui/motion';
-import { useUserEmail } from '@/components/shell/user-session-context';
+
+/**
+ * Who the studio greets. Fixed rather than derived from the signed-in email:
+ * the account local-part ("demo@…" -> "Demo") is a login detail, not the
+ * studio owner's name.
+ */
+const STUDIO_OWNER_NAME = 'Yulia';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -15,17 +21,7 @@ function greeting(): string {
   return 'Good evening';
 }
 
-function firstName(email: string | undefined): string | null {
-  if (!email) return null;
-  const local = email.split('@')[0];
-  if (!local) return null;
-  return local.charAt(0).toUpperCase() + local.slice(1);
-}
-
 export function StudioHero() {
-  const userEmail = useUserEmail();
-  const name = firstName(userEmail);
-
   return (
     <motion.div
       variants={stagger(0.08)}
@@ -37,7 +33,7 @@ export function StudioHero() {
       <div className="relative flex flex-col items-start gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-xl">
           <motion.p variants={fadeUp} className="text-sm font-medium text-fg-muted">
-            {greeting() + ' Yulia.'} 
+            {greeting()}, {STUDIO_OWNER_NAME}.
           </motion.p>
           <motion.h1
             variants={fadeUp}
