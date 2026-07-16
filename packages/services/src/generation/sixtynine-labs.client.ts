@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { env, ExternalServiceError } from '@yulia/core';
+import { AppError, env, ExternalServiceError } from '@yulia/core';
 import type { GenerationKind, GenerationStatus } from './types.js';
 
 /**
@@ -99,6 +99,25 @@ const CONCURRENCY_LIMIT_MESSAGE = /concurrent .* generation limit reached/i;
  * honored by the caller-visible error so an operator/monitor can see the window.
  */
 const CREDIT_LIMIT_MESSAGE = /(hourly|daily|weekly|monthly)\b.*\b(credit|limit)|credit limit exceeded/i;
+
+/**
+ * A job id only exists on the ACCOUNT that created it, so polling/downloading it
+ * with a DIFFERENT key 403s with a bare "Access denied". That happens whenever the
+ * key pool changes underneath an in-flight job — e.g. adding
+ * SIXTYNINE_LABS_VIDEO_KEYS/IMAGE_KEYS, or rotating a key, restarts the worker and
+ * re-pins the resumed job to a different account than submitted it. The provider
+ * id is then permanently ORPHANED: no amount of retrying can reach it, because the
+ * account that owns it is no longer the one we select for that slot.
+ *
+ * This is NOT the same as the quota/capacity 403s above (which are transient and
+ * resolve on their own). Flagged via the error's `context.orphanedJob` so the
+ * caller can drop the dead id and RESUBMIT fresh instead of failing the project —
+ * see SceneGenerationService.runLayer, which already does exactly that for a
+ * wedged job. Matched narrowly (plain "access denied" / "not found", no quota or
+ * concurrency wording) so a real auth problem — a revoked or wrong key, which
+ * resubmitting would NOT fix — still surfaces as a hard failure.
+ */
+const ORPHANED_JOB_MESSAGE = /access denied|(job|generation).*not found|not found.*(job|generation)/i;
 
 export class SixtyNineLabsClient {
   // Separate key pools per media type. 69Labs plans give far more image than
@@ -289,11 +308,32 @@ export class SixtyNineLabsClient {
           // in-process (the window is too long); we surface it as retryable so
           // BullMQ backs off and resubmits, and free this slot meanwhile.
           const isCreditLimit = res.status === 403 && CREDIT_LIMIT_MESSAGE.test(text);
+          // An "Access denied" 403 on a call that addresses an EXISTING job id
+          // (status/download — never /generate) means the id is orphaned: it was
+          // created by a different account than the one now pinned to this slot,
+          // so it can never be reached again. Flag it so the caller drops the dead
+          // id and resubmits fresh. Scoped to id-addressed reads because a 403 on
+          // /generate is a real auth failure that a resubmit would not fix.
+          const addressesExistingJob = /\/(status|download)\//.test(path);
+          const isOrphanedJob =
+            res.status === 403 &&
+            addressesExistingJob &&
+            !isConcurrencyLimit &&
+            !isCreditLimit &&
+            ORPHANED_JOB_MESSAGE.test(text);
           // 4xx = our fault (bad params, or a HARD "out of credits"), don't
           // retry; 5xx + 429 + the concurrent-job 403 + the time-window credit
-          // 403 are transient (BullMQ retries them).
+          // 403 are transient (BullMQ retries them). An orphaned job is retryable
+          // only because the caller clears the dead id first — the retry submits a
+          // NEW job rather than re-polling the unreachable one.
           throw new ExternalServiceError('69labs', `${method} ${path} -> ${res.status} ${text}`, {
-            retryable: res.status >= 500 || res.status === 429 || isConcurrencyLimit || isCreditLimit,
+            retryable:
+              res.status >= 500 ||
+              res.status === 429 ||
+              isConcurrencyLimit ||
+              isCreditLimit ||
+              isOrphanedJob,
+            ...(isOrphanedJob ? { context: { orphanedJob: true } } : {}),
           });
         }
         return (await res.json()) as unknown;
@@ -364,6 +404,16 @@ function concurrencyLimitDelayMs(attempt: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * True when an error is a 69Labs ORPHANED-JOB failure: the stored provider id was
+ * created by a different account than the one now pinned to this slot (see
+ * ORPHANED_JOB_MESSAGE), so it is permanently unreachable. Callers should clear
+ * the dead external id and resubmit rather than re-polling it.
+ */
+export function isOrphanedJobError(err: unknown): boolean {
+  return err instanceof AppError && err.context?.orphanedJob === true;
 }
 
 /** Parse a comma-separated key list (each trimmed, blanks dropped). */

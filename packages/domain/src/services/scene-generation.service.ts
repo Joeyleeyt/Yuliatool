@@ -16,6 +16,7 @@ import {
   VideoGenerationService,
   ImageGenerationService,
   keyIndexForJob,
+  isOrphanedJobError,
   type GenerationService,
   type GenerationKind,
   type GenerationRequest,
@@ -264,7 +265,29 @@ export class SceneGenerationService {
     }
 
     this.ctx.logger.info({ projectId, sceneId, kind, externalId, keyIndex }, 'awaiting 69labs generation');
-    const result = await this.pollUntilTerminal(gen, externalId, keyIndex);
+    let result: GenerationResult;
+    try {
+      result = await this.pollUntilTerminal(gen, externalId, keyIndex);
+    } catch (err) {
+      // ORPHANED JOB: this externalId belongs to a different 69Labs account than
+      // the key now pinned to this slot (the pool changed under an in-flight job
+      // — e.g. per-media keys were added, or a key was rotated, restarting the
+      // worker mid-generation). The id is unreachable forever, so polling it can
+      // never succeed. Drop it and let the retry submit a FRESH job, exactly as
+      // the wedged-job path above does. Without this the project dies on a
+      // non-retryable 403 that a resubmit would have fixed.
+      if (isOrphanedJobError(err)) {
+        this.ctx.logger.error(
+          { projectId, sceneId, kind, externalId, keyIndex },
+          '69labs job orphaned (owned by another account/key); clearing id and resubmitting fresh',
+        );
+        await this.ctx.repos.assets.clearGeneration(asset.id);
+        throw new ExternalServiceError('69labs', 'generation orphaned: provider id not owned by the active key', {
+          retryable: true,
+        });
+      }
+      throw err;
+    }
 
     if (result.status === 'failed') {
       await this.ctx.repos.assets.clearGeneration(asset.id);
