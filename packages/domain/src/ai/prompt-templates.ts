@@ -204,9 +204,12 @@ export function scenePromptSystem(_visualType: SceneVisualType): string {
     `beautiful surface, the serene interior being described, the specific tablescape, flowers, or ` +
     `textural close-up the words evoke). Only when the narration names nothing concrete may it be a ` +
     `neutral mood still that fits the beat. Compose it edge-to-edge for a 16:9 frame ` +
-    `(NOT a centered object marooned in negative space). If a person appears, pin the anatomy count ` +
-    `(exactly one woman, two hands, five fingers each, anatomically correct); prefer no hands unless ` +
-    `the beat needs them. Provide a primary image and a SECOND, DIFFERENT full-frame composition of ` +
+    `(NOT a centered object marooned in negative space). If a person appears, show her FULL BODY — ` +
+    `an elegant full-length, head-to-toe editorial shot (wide/medium-wide, including her from head ` +
+    `to feet), with the narrated object present and readable in the scene. Pin the anatomy count ` +
+    `(exactly one woman, full body, head to toe, two hands, five fingers each, two feet, correct ` +
+    `natural human proportions, anatomically correct); keep exactly one person in frame. Provide a ` +
+    `primary image and a SECOND, DIFFERENT full-frame composition of ` +
     `the same beat (overlayPrompt2) as an alternate — or null if one is enough.\n\n` +
     `Every image prompt MUST read like a brief for a high-end lifestyle campaign and specify: ` +
     `subject, environment, lighting, camera angle, lens (e.g. 35mm/50mm for a wide full-frame look), ` +
@@ -239,6 +242,13 @@ export interface ScenePromptContext {
   };
   previous: { title: string; positivePrompt: string } | null;
   next: { title: string; summary: string } | null;
+  /**
+   * When true, THIS scene's IMAGE (overlayPrompt) must FEATURE THE WOMAN with the
+   * narrated object (object still the hero); when false, the object alone. Set
+   * deterministically upstream so ~30% of stills include a person (client note:
+   * images were coming out object-only). Harmless on VIDEO scenes.
+   */
+  imageFeaturesWoman?: boolean;
 }
 
 export function scenePromptUser(c: ScenePromptContext): string {
@@ -275,21 +285,29 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `negativePrompt, and the camera, composition, lighting, motion, and colorPalette fields. ` +
     `Then, for the IMAGE: overlayPrompt — a FULL-FRAME 16:9 editorial luxury still built around the ` +
     `SPECIFIC OBJECT THIS SCENE'S NARRATION NAMES (that product / detail / dish / place), which stays ` +
-    `the clear FOCAL POINT. The object is always the hero; the woman may or may not appear:\n` +
-    `   • DEFAULT (most images) — the hero object BY ITSELF, beautifully staged on a luxury surface ` +
-    `(silk / marble / velvet / linen) with editorial light and composed edge-to-edge for the 16:9 ` +
-    `frame (NOT marooned in negative space, NOT a centered dot). No hands, no person.\n` +
-    `   • SOME images — include the SAME woman WITH the object, but keep the OBJECT the focus: she is ` +
-    `secondary and supporting (softly out of focus, cropped, from behind/over-the-shoulder, or her ` +
-    `hands presenting the object) while the narrated object is sharp and foreground. Pick this only ` +
-    `when it makes the beat feel more human/lived-in; otherwise use the object-only default. When she ` +
-    `appears, pin the anatomy: "exactly one woman, exactly two hands, five fingers per hand, ` +
-    `anatomically correct"; keep at most one person's hands in frame so nothing can fuse into an ` +
-    `impossible body.\n` +
-    `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME object ` +
-    `(another angle / detail / staging, not a repeat) that the gallery rotates to on longer scenes — ` +
-    `if the primary shows the object alone, the alternate MAY be the object-with-woman variant (or ` +
-    `vice-versa) to add variety — set it to null if this scene only needs one image.\n\n` +
+    `the clear FOCAL POINT and hero. ` +
+    (c.imageFeaturesWoman
+      ? `FOR THIS IMAGE, FEATURE THE SAME WOMAN together WITH the object (do NOT show the object ` +
+        `alone) — the client wants more images that include a person, not only objects.\n` +
+        `   FRAMING (critical) — show her FULL BODY, head-to-toe, in an elegant full-length ` +
+        `editorial shot within the setting the beat describes (a wide/medium-wide composition that ` +
+        `includes her from head to feet, standing or seated naturally). She is the same real, ` +
+        `living, naturally proportioned adult woman (not a mannequin, not a frozen pose), posed ` +
+        `elegantly WITH the narrated object present and clearly readable in the scene (she is ` +
+        `holding/using it, or it sits prominently beside her). Keep it a poised, high-end fashion ` +
+        `full-body look. Pin the anatomy: "exactly one woman, full body, head to toe, two hands, ` +
+        `five fingers per hand, two feet, correct natural human proportions, anatomically correct"; ` +
+        `keep exactly one person in frame so nothing can fuse into an impossible body. Staged in ` +
+        `beautiful editorial light, composed edge-to-edge for the 16:9 frame.\n` +
+        `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME beat ` +
+        `(another angle / staging) that the gallery rotates to on longer scenes — it MAY show the ` +
+        `object alone for variety — or null if one image is enough.\n\n`
+      : `FOR THIS IMAGE, show the hero object BY ITSELF (no person, no hands): beautifully staged on ` +
+        `a luxury surface (silk / marble / velvet / linen) with editorial light, composed ` +
+        `edge-to-edge for the 16:9 frame (NOT marooned in negative space, NOT a centered dot).\n` +
+        `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME ` +
+        `object (another angle / detail / staging, not a repeat) that the gallery rotates to on ` +
+        `longer scenes — set it to null if this scene only needs one image.\n\n`) +
     `Also, the BACKGROUND positivePrompt must read as PHOTOREALISTIC LIVE-ACTION footage on a real ` +
     `cinema camera (luxury commercial / Netflix-doc look — not AI art, a catalog still, or a ` +
     `mannequin). If a woman is present she is the primary subject: a real living adult, breathing, ` +
