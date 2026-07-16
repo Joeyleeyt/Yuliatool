@@ -52,7 +52,13 @@ export const QUEUE_RETRY_POLICY: Record<
 > = {
   [QueueName.TRANSCRIPTION]: { attempts: 4, backoffMs: 5_000 },
   [QueueName.SCRIPT_ANALYSIS]: { attempts: 4, backoffMs: 5_000 },
-  [QueueName.PROMPT_GENERATION]: { attempts: 4, backoffMs: 5_000 },
+  // PROMPT_GENERATION prompts many scenes against OpenAI's per-minute TOKEN cap
+  // (TPM). On a low OpenAI tier (e.g. 30k TPM) a long video's batched prompts can
+  // 429 repeatedly; the in-process retry (see OpenAIService) absorbs most, but a
+  // dense batch can still exhaust one job attempt. Give the job 8 attempts on a
+  // longer backoff so a whole-job retry lands AFTER the 60s TPM window has reset,
+  // instead of failing the project and forcing a manual "Retry" click.
+  [QueueName.PROMPT_GENERATION]: { attempts: 8, backoffMs: 20_000 },
   [QueueName.VIDEO_GENERATION]: { attempts: 10, backoffMs: 15_000 },
   [QueueName.IMAGE_GENERATION]: { attempts: 10, backoffMs: 10_000 },
   [QueueName.DOWNLOAD_ASSETS]: { attempts: 3, backoffMs: 5_000 },

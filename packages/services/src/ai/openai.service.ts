@@ -35,8 +35,18 @@ export interface StructuredResult<T> {
  * prompt-generation job (mapLimit rejects on first error), even though the
  * other 7 in-flight scenes would have succeeded.
  */
-const RATE_LIMIT_MAX_RETRIES = 5;
+// TPM-cap 429s recover within the reset window (OpenAI's hint is usually 1-9s),
+// so retry generously in-process — a single scene's rate-limit hiccup must not
+// bubble up and fail the whole batched prompt-generation job (which then burns a
+// BullMQ attempt). 8 retries × up-to-~10s hints comfortably outlasts any TPM
+// window while the caller's concurrency keeps overall throughput reasonable.
+const RATE_LIMIT_MAX_RETRIES = 8;
 const RATE_LIMIT_BASE_DELAY_MS = 2_000;
+// Extra random spread (ms) added to each rate-limit wait. Without it, N scenes
+// that all 429'd on the same TPM window read the SAME "try again in Xs" hint and
+// resume in lockstep — instantly re-tripping the cap. Jitter de-syncs them so the
+// budget refills are consumed a few at a time instead of in one colliding burst.
+const RATE_LIMIT_JITTER_MS = 1_500;
 
 /**
  * Thin, domain-agnostic wrapper over OpenAI structured outputs. Every call is
@@ -142,9 +152,12 @@ export class OpenAIService {
  * shape ever changes.
  */
 function rateLimitDelayMs(error: RateLimitError, attempt: number): number {
+  const jitter = Math.floor(Math.random() * RATE_LIMIT_JITTER_MS);
   const hint = /try again in ([\d.]+)s/i.exec(error.message ?? '');
-  if (hint) return Math.ceil(Number(hint[1]) * 1000) + 250; // small buffer past the hint
-  return RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
+  // Honor OpenAI's precise reset hint (+ a small buffer), plus jitter so
+  // simultaneously-throttled scenes don't all resume in the same instant.
+  if (hint) return Math.ceil(Number(hint[1]) * 1000) + 250 + jitter;
+  return RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt + jitter;
 }
 
 function sleep(ms: number): Promise<void> {
