@@ -90,6 +90,24 @@ async function backgroundSrcDuration(backgroundPath: string, durationSec: number
 }
 
 /**
+ * Longest stretch of SOURCE (seconds) the boomerang path may buffer for one
+ * forward→reverse cycle. `reverse` and `loop` both hold decoded frames in RAM
+ * (~3MB per 1080p frame), so the cycle — 2x this — is the memory high-water mark:
+ * 8s -> 2x8x30 = 480 frames ~= 1.4GB. The real budget is VM RAM split across
+ * RENDER_COMPOSITE_CONCURRENCY parallel ffmpegs (16GB/8 ~= 2GB each), not the
+ * whole machine, so this leaves headroom. Uncapped, one 122s source built a
+ * 7320-frame (~21GB) buffer and Linux SIGKILLed the render.
+ *
+ * 8s is also BACKGROUND_CLIP.nativeClipSec — the length 69Labs actually returns —
+ * so the common case is unaffected and only pathological sources get trimmed.
+ *
+ * Visually free: a boomerang only runs when the source is too SHORT to fill the
+ * scene, so a longer source is already several cycles' worth of motion — trimming
+ * the unseen tail changes nothing on screen.
+ */
+const BOOMERANG_MAX_SRC_SEC = 8;
+
+/**
  * Build the complete `[0:v]…[<outLabel>]` background chain that fills a scene of
  * `durationSec` from an assembled source clip WITHOUT ever freezing a tail.
  *
@@ -142,17 +160,41 @@ function buildBackgroundFill(
   // the caller's `-t`. A light constant slow (maxSlowFactor) still applies so the
   // motion reads calm rather than brisk.
   const slow = TRANSITION.maxSlowFactor.toFixed(4);
-  const cycleSec = 2 * srcDur; // forward + reverse
+  // MEMORY BOUND (this filter OOM-killed the render — SIGKILL, no stderr): BOTH
+  // `reverse` and `loop` buffer DECODED frames in RAM, and a 1080p frame is ~3MB.
+  // Left uncapped, a long source built a cycle of thousands of frames (~22GB) and
+  // Linux killed ffmpeg. The render pool runs RENDER_COMPOSITE_CONCURRENCY
+  // composites at once, so the real budget is VM RAM / that count — a few GB
+  // each, not the whole machine. Cap the buffered source so one cycle stays well
+  // inside it; a longer source is simply trimmed, which costs nothing visually
+  // (the tail was never going to be seen — the cycle repeats before reaching it).
+  const srcForCycle = Math.min(srcDur, BOOMERANG_MAX_SRC_SEC);
+  const cycleSec = 2 * srcForCycle; // forward + reverse
   const effectiveCycleSec = cycleSec * TRANSITION.maxSlowFactor;
   // Whole cycles needed to cover the scene (ceil), min 1. Each cycle is one
   // forward + one reverse of the source.
   const cycles = Math.max(1, Math.ceil(durationSec / effectiveCycleSec));
   // Frames in one ping-pong cycle (pre-slow); `loop` counts frames.
   const cycleFrames = Math.max(1, Math.round(cycleSec * fps));
+  // Trim the source to the capped cycle length before the split, so `reverse`
+  // (which buffers its whole input) never sees more than the cap either.
+  const trimForCycle =
+    srcForCycle < srcDur ? `trim=duration=${srcForCycle.toFixed(3)},setpts=PTS-STARTPTS,` : '';
+
+  // One cycle already covers the scene — `loop=0` would repeat nothing while
+  // still paying the full buffer cost, so skip `loop` entirely and let `-t` trim.
+  if (cycles <= 1) {
+    return (
+      `[0:v]${cover},fps=${fps},setsar=1,${trimForCycle}split[fwd${outLabel}][rv${outLabel}];` +
+      `[rv${outLabel}]reverse[rev${outLabel}];` +
+      `[fwd${outLabel}][rev${outLabel}]concat=n=2:v=1:a=0[cycle${outLabel}];` +
+      `[cycle${outLabel}]setpts=${slow}*PTS,fps=${fps}[${outLabel}]`
+    );
+  }
 
   return (
     // Normalize + split, reverse one branch, concat to a forward→reverse cycle.
-    `[0:v]${cover},fps=${fps},setsar=1,split[fwd${outLabel}][rv${outLabel}];` +
+    `[0:v]${cover},fps=${fps},setsar=1,${trimForCycle}split[fwd${outLabel}][rv${outLabel}];` +
     `[rv${outLabel}]reverse[rev${outLabel}];` +
     `[fwd${outLabel}][rev${outLabel}]concat=n=2:v=1:a=0[cycle${outLabel}];` +
     // Repeat the whole cycle enough times, then gently slow the result. `loop`
