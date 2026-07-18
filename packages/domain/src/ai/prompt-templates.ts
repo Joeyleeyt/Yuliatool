@@ -79,9 +79,15 @@ export function subjectLang(subject: SubjectOutput): SubjectLang {
   if (both) {
     return {
       headline:
-        `SUBJECT — this video centers on TWO recurring people (${brief || 'a woman and a man'}). ` +
-        `Keep BOTH identities consistent across scenes. In any single close shot, keep at most ONE ` +
-        `person's hands in frame to avoid duplicated-limb defects.`,
+        `SUBJECT — this video features BOTH A WOMAN AND A MAN ` +
+        `(${brief || 'a woman and a man sharing everyday moments'}). ` +
+        `The script is not tied to one gender, so show both across the ` +
+        `video, EACH performing the narration's actions and motions — some scenes lead with the ` +
+        `woman, some with the man, and some show them TOGETHER in the same moment (the exact beat ` +
+        `the narration describes). Do not make the whole video one gender. Keep each person's ` +
+        `identity consistent across the scenes they appear in. ANATOMY SAFETY: when both share a ` +
+        `frame, stage them clearly separated (not hands overlapping in one tight close-up) and keep ` +
+        `at most ONE person's hands in any close shot, so no extra/duplicated limbs can form.`,
       noun: 'person',
       they: 'they',
       their: 'their',
@@ -128,19 +134,27 @@ export function analysisUser(fullText: string): string {
     `camera language, mood, wardrobe, setting) consistent with the house style; a prompt ` +
     `strategy (guidance plus do/avoid lists) tuned for a cinematic text-to-video/image model; ` +
     `the SUBJECT; and continuity anchors.\n\n` +
-    `SUBJECT — determine, FROM THE NARRATION ITSELF, who or what the video is about on screen. ` +
-    `Do NOT default to a woman; read the actual content:\n` +
-    `  - presence: 'primary' if one recurring PERSON is the focus (e.g. a beauty/fashion vlog, a ` +
-    `personal story); 'incidental' if people appear but there's no single recurring individual to ` +
-    `hold identity on (e.g. a nostalgia piece with period crowds, a street scene); 'none' if the ` +
-    `subject is a PRODUCT, place, or concept and no specific person recurs (e.g. a product review, ` +
-    `a documentary about a city).\n` +
-    `  - gender: for a 'primary' person use 'woman', 'man', or 'both' as the narration implies ` +
-    `(pick the one the script is actually about — first-person cues, names, pronouns, topic); use ` +
-    `'na' when presence is 'incidental' or 'none'.\n` +
+    `SUBJECT — determine, FROM THE WHOLE NARRATION (not a single line), who or what the video is ` +
+    `about on screen. Do NOT default to a woman; read the entire script and decide:\n` +
+    `  - presence: 'primary' whenever the video is about a PERSON or people / a human lifestyle ` +
+    `(a beauty or fashion piece, a personal story, "your morning routine", advice to a viewer); ` +
+    `'incidental' if people only appear as background with no through-line (a nostalgia piece with ` +
+    `period crowds, a street scene); 'none' ONLY when the whole script is genuinely about a PRODUCT, ` +
+    `place, or concept with no human focus at all (a gadget review, a documentary about a city).\n` +
+    `  - gender (this is the key decision):\n` +
+    `      • if the WHOLE script is about a WOMAN (feminine pronouns, a woman's name, women's ` +
+    `products/topics) → 'woman';\n` +
+    `      • if the WHOLE script is about a MAN (masculine pronouns, a man's name, men's ` +
+    `products/topics) → 'man';\n` +
+    `      • if it is a people/lifestyle video but NOT tied to a specific gender (no clear ` +
+    `gender cues, addressed to "you", general human topics) → 'both' (the video will show BOTH a ` +
+    `woman and a man);\n` +
+    `      • use 'na' ONLY when presence is 'incidental' or 'none'.\n` +
+    `    Judge from the ENTIRE script, not one phrase — one stray "he" or "she" does not override an ` +
+    `otherwise gender-neutral video.\n` +
     `  - description: a one-line casting/subject brief the scene prompts will reuse, e.g. ` +
-    `"an elegant adult woman", "a middle-aged man recalling his youth", "the product itself, shown ` +
-    `hero-style with no fixed presenter".\n\n` +
+    `"an elegant adult woman", "a middle-aged man recalling his youth", "a woman and a man sharing ` +
+    `everyday moments", "the product itself, shown hero-style with no fixed presenter".\n\n` +
     `CONTINUITY ANCHORS — the few things that MUST persist across every scene: for a 'primary' ` +
     `subject, that person's IDENTITY (face, hair, age, grooming); always the overall film grade. ` +
     `NOT a fixed location or outfit — environment, wardrobe, background, and colors CHANGE per scene ` +
