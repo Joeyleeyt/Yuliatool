@@ -98,14 +98,13 @@ async function backgroundSrcDuration(backgroundPath: string, durationSec: number
  * whole machine, so this leaves headroom. Uncapped, one 122s source built a
  * 7320-frame (~21GB) buffer and Linux SIGKILLed the render.
  *
- * 8s is also BACKGROUND_CLIP.nativeClipSec — the length 69Labs actually returns —
- * so the common case is unaffected and only pathological sources get trimmed.
- *
- * Visually free: a boomerang only runs when the source is too SHORT to fill the
- * scene, so a longer source is already several cycles' worth of motion — trimming
- * the unseen tail changes nothing on screen.
+ * Only a genuinely SHORT source ever reaches the boomerang (a long assembly is
+ * covered by Regime 1's stretch — see buildBackgroundFill), so this cap changes
+ * nothing for real multi-clip scenes; it only bounds the pathological
+ * single-short-clip case. It must stay >= a couple of native clips so a short
+ * multi-clip assembly still boomerangs its WHOLE self, not a sliver.
  */
-const BOOMERANG_MAX_SRC_SEC = 8;
+const BOOMERANG_MAX_SRC_SEC = 24;
 
 /**
  * Build the complete `[0:v]…[<outLabel>]` background chain that fills a scene of
@@ -140,16 +139,31 @@ function buildBackgroundFill(
 ): string {
   const cover = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`;
   const srcDur = srcDurationSec > 0 ? srcDurationSec : durationSec;
-  // How much the gentle slow-mo alone can cover.
-  const slowCoverSec = srcDur * TRANSITION.maxSlowFactor;
   // A small epsilon so a source that's essentially long enough doesn't loop for
   // a few frames' worth of shortfall (the trailing `-t` trims any tiny excess).
   const EPS = 0.15;
 
-  if (slowCoverSec >= durationSec - EPS) {
-    // Regime 1: gentle slow to fill. Cap the factor so a source that's already
-    // long enough plays at ~1x; the downstream `-t durationSec` trims any excess.
-    const slow = Math.min(TRANSITION.maxSlowFactor, Math.max(1, durationSec / srcDur)).toFixed(4);
+  // Regime 1 — STRETCH to fill, playing ALL the footage. Used whenever the
+  // source is a real multi-clip assembly (>= LONG_SOURCE_SEC): stretching a
+  // dozen distinct clips a little keeps every distinct shot on screen, which is
+  // FAR better than looping. `maxSlowFactor` is the *preferred* gentle cap, but a
+  // long hold can need more than 1.2x — a 120s assembly over a 154s span needs
+  // 1.28x. Stretching a long source even 2-3x still reads as real motion (there's
+  // lots of distinct content), whereas looping/boomeranging it is the exact
+  // "one video clip repeating" defect the client reported. So for a long source
+  // we allow a larger stretch rather than dropping into the boomerang.
+  const LONG_SOURCE_SEC = 20; // ~3 native clips: enough distinct footage to stretch
+  const gentleCoverSec = srcDur * TRANSITION.maxSlowFactor;
+  const isLongAssembly = srcDur >= LONG_SOURCE_SEC;
+  if (gentleCoverSec >= durationSec - EPS || isLongAssembly) {
+    // Stretch factor: gentle when the source is nearly long enough; otherwise as
+    // much as the span needs so no footage is dropped and nothing loops. Bounded
+    // so a truly tiny source doesn't fall here (isLongAssembly gates that).
+    const factor = Math.max(1, durationSec / srcDur);
+    const slow = (gentleCoverSec >= durationSec - EPS
+      ? Math.min(TRANSITION.maxSlowFactor, factor)
+      : factor
+    ).toFixed(4);
     return `[0:v]${cover},setpts=${slow}*PTS,fps=${fps}[${outLabel}]`;
   }
 
