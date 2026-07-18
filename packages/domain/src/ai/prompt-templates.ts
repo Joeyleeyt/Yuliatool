@@ -270,6 +270,18 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `the ONE piece the beat names, big and in focus (on a hand, or on a clean surface) — never an ` +
     `open drawer/tray of assorted pieces. Same rule for any fiddly small object (watch faces, ` +
     `coins, keys, cosmetics minutiae): few, large, simple — never a dense array of tiny ones.\n\n` +
+    `#3 RULE — OBJECT PHYSICS / SUPPORT (client complaint: a box/drawer floating in mid-air). EVERY ` +
+    `object in frame MUST be physically SUPPORTED and obey gravity — there is exactly one correct ` +
+    `place for it: RESTING on a surface (table, dresser, tray on a counter, shelf, floor), FIRMLY ` +
+    `HELD in a hand with a clear, correct grip (fingers wrapped around it, weight visibly carried), ` +
+    `or HANGING from a fixture (hook, rail, rack). State the support explicitly in the prompt — say ` +
+    `WHERE the object sits or HOW it is held. NEVER describe or imply an object floating, hovering, ` +
+    `suspended, or mid-air with nothing under it. A drawer or jewelry box is INSIDE or ON a piece of ` +
+    `furniture (a dresser, vanity, console) — never detached and floating in front of a person. If a ` +
+    `person interacts with an object, their hands must make believable contact and bear its weight ` +
+    `(both hands under a tray, fingers gripping a handle), not hover near it. This applies to the ` +
+    `BACKGROUND video and the IMAGE, and to fabric, furniture, and props alike: everything rests, ` +
+    `hangs, or is held — nothing levitates.\n\n` +
     `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
     `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
     `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +

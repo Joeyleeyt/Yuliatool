@@ -69,6 +69,11 @@ export const HOUSE_STYLE = {
     'morphing, warping, flickering, unstable geometry, floating objects, levitating fabric, ' +
     'unnatural motion, physically impossible movement, melting, jittering, wobbling walls, ' +
     'inconsistent lighting between frames, ' +
+    // --- object support / gravity (client: a box/drawer floating in mid-air) ---
+    'floating object, levitating object, object hovering in mid-air, floating drawer, ' +
+    'levitating box, floating tray, unsupported object, object suspended in air, ' +
+    'floating furniture, object not resting on any surface, object held by nothing, ' +
+    'gravity-defying object, item floating away from the hands, ' +
     // --- subject locomotion / clipping ---
     'person walking through furniture, body clipping through objects, limbs passing through ' +
     'solid surfaces, feet not touching the floor, sinking into furniture, teleporting, ' +
