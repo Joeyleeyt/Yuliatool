@@ -259,6 +259,17 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
     `keep at most ONE person's hands in any close shot. Prefer showing the product with NO hands ` +
     `at all when hands aren't essential.\n\n` +
+    `#2 RULE — INTRICATE SMALL OBJECTS MUST STAY SIMPLE AND LARGE (client complaint: melted / ` +
+    `malformed jewelry). The model renders many tiny detailed objects as blurred blobs, so NEVER ` +
+    `compose a cluttered CLUSTER of small intricate items: no jewelry tray/box/organizer packed ` +
+    `with many rings and earrings, no display case full of pieces, no shelf of many small figurines, ` +
+    `no table strewn with dozens of tiny objects. Instead show ONE hero piece (at most two or three) ` +
+    `LARGE, close, and centered — a single ring, a single necklace, one pair of earrings — so it ` +
+    `fills enough of the frame to render cleanly with correct metal, prongs, and gemstones. This ` +
+    `applies to BOTH the background video and the image. If the narration is about jewelry, show ` +
+    `the ONE piece the beat names, big and in focus (on a hand, or on a clean surface) — never an ` +
+    `open drawer/tray of assorted pieces. Same rule for any fiddly small object (watch faces, ` +
+    `coins, keys, cosmetics minutiae): few, large, simple — never a dense array of tiny ones.\n\n` +
     `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
     `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
     `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +

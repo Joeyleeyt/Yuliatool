@@ -74,9 +74,15 @@ export const HOUSE_STYLE = {
     'solid surfaces, feet not touching the floor, sinking into furniture, teleporting, ' +
     'phasing through walls, objects merging together, object passing through another object, ' +
     'mismatched scale, duplicated subject, ' +
-    // --- jewelry defects ---
+    // --- jewelry / tiny-object defects ---
     'broken jewelry, deformed metal, melted gemstones, asymmetric earrings, extra prongs, ' +
-    'malformed clasp, warped ring, distorted bracelet',
+    'malformed clasp, warped ring, distorted bracelet, ' +
+    // clusters of tiny intricate items render as blobs — forbid the whole composition,
+    // not just the per-item defect (client: melted jewelry in an open display tray).
+    'cluttered jewelry tray, jewelry box full of pieces, display case of many rings, ' +
+    'array of tiny objects, dozens of small items, cluttered tray of small objects, ' +
+    'many small blurred trinkets, indistinct tiny objects, melted small objects, ' +
+    'blobby jewelry, undefined small shapes',
 
   /**
    * Positive realism preamble PREPENDED to every generation's positive prompt
