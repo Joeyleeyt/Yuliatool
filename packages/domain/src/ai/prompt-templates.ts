@@ -282,6 +282,20 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `(both hands under a tray, fingers gripping a handle), not hover near it. This applies to the ` +
     `BACKGROUND video and the IMAGE, and to fabric, furniture, and props alike: everything rests, ` +
     `hangs, or is held — nothing levitates.\n\n` +
+    `#4 RULE — LOWER BODY / FEET INTEGRITY (client complaint: legs and feet melting/dissolving into ` +
+    `the floor). Feet are the hardest thing for the model to render, and they fail most when they ` +
+    `are (a) partially HIDDEN behind furniture, (b) LOW-CONTRAST against the floor (light shoes/hem ` +
+    `on a pale floor, backlit), or (c) small and far. So when a person is shown FULL-LENGTH: place ` +
+    `their feet in CLEAR, UNOBSTRUCTED view — standing on OPEN floor, feet fully visible and NOT ` +
+    `occluded by a table, sofa, or rug edge cutting across the shins/ankles. Give the feet CONTRAST ` +
+    `with the floor (e.g. defined shoes, a shadow grounding them) so the boundary reads. State it in ` +
+    `the prompt: "both feet fully visible and flat on the floor, clearly separated from the ground, ` +
+    `natural shoes, grounded with a soft contact shadow". If the setting would force the feet behind ` +
+    `an object or into a washed-out low-contrast floor, DO NOT fake a full-length shot there — either ` +
+    `move the person to open floor, or frame from the KNEES/THIGHS UP (a clean three-quarter or ` +
+    `medium shot) so no melted feet are shown at all. A clean knee-up shot is FAR better than a ` +
+    `full-length shot with dissolving feet. Never let legs blur, taper, fuse, or melt into the ` +
+    `floor.\n\n` +
     `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
     `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
     `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +
@@ -366,9 +380,11 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `beautiful surface, the serene interior being described, the specific tablescape, flowers, or ` +
     `textural close-up the words evoke). Only when the narration names nothing concrete may it be a ` +
     `neutral mood still that fits the beat. Compose it edge-to-edge for a 16:9 frame ` +
-    `(NOT a centered object marooned in negative space). If a person appears, show her FULL BODY — ` +
-    `an elegant full-length, head-to-toe editorial shot (wide/medium-wide, including her from head ` +
-    `to feet) in which she is ACTIVELY connected to the EXACT object this scene's narration names — ` +
+    `(NOT a centered object marooned in negative space). If a person appears, prefer a full-length ` +
+    `head-to-toe editorial shot — BUT only when the feet can be shown cleanly on open, contrasting ` +
+    `floor (see #4). If the setting would push the feet behind furniture or into a washed-out floor, ` +
+    `frame from the KNEES/THIGHS UP instead (a clean medium shot) rather than risk melted feet. ` +
+    `Either way she is ACTIVELY connected to the EXACT object this scene's narration names — ` +
     `holding, using, wearing, or presenting that specific object (not a generic prop, not a vague ` +
     `background item) so the object and the woman clearly belong to the same beat and the object ` +
     `stays readable and in focus. Pin the anatomy count ` +

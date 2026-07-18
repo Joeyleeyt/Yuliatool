@@ -62,6 +62,11 @@ export const HOUSE_STYLE = {
     // legs/feet — reinforced because ~30% of stills are now full-body (head-to-toe)
     'extra legs, third leg, duplicated legs, extra feet, malformed feet, deformed feet, ' +
     'distorted legs, elongated legs, fused legs, missing feet, bad proportions, ' +
+    // legs/feet DISSOLVING (client: legs melting into the floor behind a table, low contrast)
+    'legs melting into the floor, feet dissolving into the ground, legs fading into the floor, ' +
+    'feet merging with the floor, blurred lower body, legs tapering into a blur, feet without ' +
+    'clear boundary, legs disappearing behind furniture, feet clipped by the table, ' +
+    'smeared shins, indistinct feet, feet blending into a pale floor, ' +
     // --- generic quality ---
     'lowres, blurry, deformed, disfigured, watermark, text, logo, cartoon, cgi look, ' +
     'plastic skin, oversaturated, harsh flash, cluttered background, amateur, ' +
