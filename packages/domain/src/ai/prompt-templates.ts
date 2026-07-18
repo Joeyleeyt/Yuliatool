@@ -22,6 +22,14 @@ import type { TranscriptUnit } from './transcript-units.js';
  * guards elsewhere stay — they just apply to whatever PERSON (if any) this
  * describes, not specifically a woman.
  */
+/**
+ * Casting for the on-screen people. Client direction: everyone in every video and
+ * image is European. Kept as one constant so it's the single place to change the
+ * cast look; it's woven into every subject case (woman / man / both / incidental /
+ * any person in a product scene) so no person is ever left to the model's default.
+ */
+const PERSON_ETHNICITY = 'European (fair to light complexion, natural European facial features)';
+
 interface SubjectLang {
   /** Directive placed at the top of the scene system prompt. */
   headline: string;
@@ -46,7 +54,8 @@ export function subjectLang(subject: SubjectOutput): SubjectLang {
         `${brief || 'the product / place / topic itself'}. Do NOT insert a person into scenes by ` +
         `default. Center each scene on the OBJECT, PLACE, or MOMENT the narration names. A person ` +
         `appears ONLY when a specific beat's narration clearly calls for one; when that happens, ` +
-        `pin their anatomy exactly as below. Most scenes should have NO person in frame.`,
+        `they are ${PERSON_ETHNICITY}, and pin their anatomy exactly as below. Most scenes should ` +
+        `have NO person in frame.`,
       noun: 'person',
       they: 'they',
       their: 'their',
@@ -62,7 +71,8 @@ export function subjectLang(subject: SubjectOutput): SubjectLang {
       headline:
         `SUBJECT — people may appear (${brief || 'period-appropriate figures, passers-by'}) but ` +
         `there is NO single recurring individual to keep identical across scenes. Do not hold one ` +
-        `face; cast whoever the beat needs. Keep every person anatomically correct.`,
+        `face; cast whoever the beat needs. Every person is ${PERSON_ETHNICITY}. Keep every person ` +
+        `anatomically correct.`,
       noun: 'person',
       they: 'they',
       their: 'their',
@@ -84,7 +94,8 @@ export function subjectLang(subject: SubjectOutput): SubjectLang {
         `The script is not tied to one gender, so show both across the ` +
         `video, EACH performing the narration's actions and motions — some scenes lead with the ` +
         `woman, some with the man, and some show them TOGETHER in the same moment (the exact beat ` +
-        `the narration describes). Do not make the whole video one gender. Keep each person's ` +
+        `the narration describes). Do not make the whole video one gender. BOTH the woman and the ` +
+        `man are ${PERSON_ETHNICITY}. Keep each person's ` +
         `identity consistent across the scenes they appear in. ANATOMY SAFETY: when both share a ` +
         `frame, stage them clearly separated (not hands overlapping in one tight close-up) and keep ` +
         `at most ONE person's hands in any close shot, so no extra/duplicated limbs can form.`,
@@ -102,8 +113,8 @@ export function subjectLang(subject: SubjectOutput): SubjectLang {
   return {
     headline:
       `SUBJECT — this video centers on ${brief || `an adult ${noun}`}. The recurring on-screen ` +
-      `subject is a ${noun}; keep ${man ? 'his' : 'her'} identity (face, hair, age, grooming) ` +
-      `consistent across scenes.`,
+      `subject is a ${noun}, ${PERSON_ETHNICITY}; keep ${man ? 'his' : 'her'} identity (face, hair, ` +
+      `age, grooming) consistent across scenes.`,
     noun,
     they: man ? 'he' : 'she',
     their: man ? 'his' : 'her',
