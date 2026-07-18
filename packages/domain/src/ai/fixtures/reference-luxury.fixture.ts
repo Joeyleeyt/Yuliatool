@@ -66,6 +66,11 @@ export const REFERENCE_LUXURY_ANALYSIS: AnalysisOutput = {
       'Distorted faces or hands',
     ],
   },
+  subject: {
+    presence: 'primary',
+    gender: 'woman',
+    description: 'an elegant adult woman',
+  },
   continuityAnchors: [
     "Narrator's polished look (same woman, refined grooming)",
     'White peonies present or implied in the background',

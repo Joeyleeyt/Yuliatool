@@ -1,4 +1,9 @@
-import { HOUSE_STYLE, SEGMENT_WINDOW_SEC, type SceneVisualType } from '@yulia/core';
+import {
+  HOUSE_STYLE,
+  SEGMENT_WINDOW_SEC,
+  type SceneVisualType,
+  type SubjectOutput,
+} from '@yulia/core';
 import type { TranscriptUnit } from './transcript-units.js';
 
 /**
@@ -6,11 +11,109 @@ import type { TranscriptUnit } from './transcript-units.js';
  * house aesthetic and the continuity contract; the OpenAIService stays generic.
  */
 
+/**
+ * Person-language for the DETECTED subject, so the scene prompts stop assuming a
+ * woman. The tool serves multiple channels — fashion (a woman), nostalgia (a man
+ * / period people / none), product reviews (the product) — so who appears must
+ * follow the narration.
+ *
+ * Returns the noun + pronouns the template splices in, plus a headline directive
+ * that overrides the historical "she is a woman" wording. The anatomy/physics
+ * guards elsewhere stay — they just apply to whatever PERSON (if any) this
+ * describes, not specifically a woman.
+ */
+interface SubjectLang {
+  /** Directive placed at the top of the scene system prompt. */
+  headline: string;
+  /** Singular person noun, e.g. "woman", "man", "person". */
+  noun: string;
+  /** Subject / possessive / object pronouns for that noun. */
+  they: string;
+  their: string;
+  them: string;
+  /** The anatomy-count phrase, e.g. "exactly one woman, two hands, five fingers each". */
+  anatomy: string;
+  /** True when a specific recurring person's identity should be held across scenes. */
+  holdsIdentity: boolean;
+}
+
+export function subjectLang(subject: SubjectOutput): SubjectLang {
+  const brief = subject.description?.trim();
+  if (subject.presence === 'none') {
+    return {
+      headline:
+        `SUBJECT — this video is NOT about a specific recurring person; it is about ` +
+        `${brief || 'the product / place / topic itself'}. Do NOT insert a person into scenes by ` +
+        `default. Center each scene on the OBJECT, PLACE, or MOMENT the narration names. A person ` +
+        `appears ONLY when a specific beat's narration clearly calls for one; when that happens, ` +
+        `pin their anatomy exactly as below. Most scenes should have NO person in frame.`,
+      noun: 'person',
+      they: 'they',
+      their: 'their',
+      them: 'them',
+      anatomy:
+        'if a person appears: exactly one person, two hands, five fingers on each hand, ' +
+        'anatomically correct natural human proportions',
+      holdsIdentity: false,
+    };
+  }
+  if (subject.presence === 'incidental') {
+    return {
+      headline:
+        `SUBJECT — people may appear (${brief || 'period-appropriate figures, passers-by'}) but ` +
+        `there is NO single recurring individual to keep identical across scenes. Do not hold one ` +
+        `face; cast whoever the beat needs. Keep every person anatomically correct.`,
+      noun: 'person',
+      they: 'they',
+      their: 'their',
+      them: 'them',
+      anatomy:
+        'each visible person: two hands, five fingers on each hand, anatomically correct ' +
+        'natural human proportions; no extra or duplicated limbs',
+      holdsIdentity: false,
+    };
+  }
+  // presence === 'primary' — one recurring person the video centers on.
+  const man = subject.gender === 'man';
+  const both = subject.gender === 'both';
+  if (both) {
+    return {
+      headline:
+        `SUBJECT — this video centers on TWO recurring people (${brief || 'a woman and a man'}). ` +
+        `Keep BOTH identities consistent across scenes. In any single close shot, keep at most ONE ` +
+        `person's hands in frame to avoid duplicated-limb defects.`,
+      noun: 'person',
+      they: 'they',
+      their: 'their',
+      them: 'them',
+      anatomy:
+        'each person: exactly two hands, five fingers on each hand, anatomically correct; never ' +
+        'more hands or arms than the visible people can have',
+      holdsIdentity: true,
+    };
+  }
+  const noun = man ? 'man' : 'woman';
+  return {
+    headline:
+      `SUBJECT — this video centers on ${brief || `an adult ${noun}`}. The recurring on-screen ` +
+      `subject is a ${noun}; keep ${man ? 'his' : 'her'} identity (face, hair, age, grooming) ` +
+      `consistent across scenes.`,
+    noun,
+    they: man ? 'he' : 'she',
+    their: man ? 'his' : 'her',
+    them: man ? 'him' : 'her',
+    anatomy: `exactly one ${noun}, two hands, five fingers on each hand, anatomically correct`,
+    holdsIdentity: true,
+  };
+}
+
 // --- Stage 1: global analysis -----------------------------------------------
 export function analysisSystem(): string {
   return (
-    `You are a world-class creative director for a faceless luxury YouTube channel. ` +
-    `${HOUSE_STYLE.descriptor} You translate narration into a cohesive, elegant visual identity. ` +
+    `You are a world-class creative director for a faceless cinematic YouTube channel. ` +
+    `${HOUSE_STYLE.descriptor} You translate narration into a cohesive, elegant visual identity ` +
+    `that FITS THE NARRATION'S OWN TOPIC — the channel's polish is constant, but WHO or WHAT is on ` +
+    `screen is dictated by the script, never assumed. ` +
     `Respond ONLY with the requested structured JSON.`
   );
 }
@@ -24,11 +127,25 @@ export function analysisUser(fullText: string): string {
     `emotion and intensity 0..1); recurring visual motifs; a style guide (palette, lighting, ` +
     `camera language, mood, wardrobe, setting) consistent with the house style; a prompt ` +
     `strategy (guidance plus do/avoid lists) tuned for a cinematic text-to-video/image model; ` +
-    `and continuity anchors that MUST persist across every scene. IMPORTANT: anchors describe the ` +
-    `woman's IDENTITY only (her face, hair, age, refined grooming) plus the overall warm film grade ` +
-    `— NOT a fixed location or outfit. The environment, wardrobe, background, and colors are meant ` +
-    `to CHANGE per scene to follow the narration, so do NOT lock a single room, setting, or outfit ` +
-    `as an anchor.`
+    `the SUBJECT; and continuity anchors.\n\n` +
+    `SUBJECT — determine, FROM THE NARRATION ITSELF, who or what the video is about on screen. ` +
+    `Do NOT default to a woman; read the actual content:\n` +
+    `  - presence: 'primary' if one recurring PERSON is the focus (e.g. a beauty/fashion vlog, a ` +
+    `personal story); 'incidental' if people appear but there's no single recurring individual to ` +
+    `hold identity on (e.g. a nostalgia piece with period crowds, a street scene); 'none' if the ` +
+    `subject is a PRODUCT, place, or concept and no specific person recurs (e.g. a product review, ` +
+    `a documentary about a city).\n` +
+    `  - gender: for a 'primary' person use 'woman', 'man', or 'both' as the narration implies ` +
+    `(pick the one the script is actually about — first-person cues, names, pronouns, topic); use ` +
+    `'na' when presence is 'incidental' or 'none'.\n` +
+    `  - description: a one-line casting/subject brief the scene prompts will reuse, e.g. ` +
+    `"an elegant adult woman", "a middle-aged man recalling his youth", "the product itself, shown ` +
+    `hero-style with no fixed presenter".\n\n` +
+    `CONTINUITY ANCHORS — the few things that MUST persist across every scene: for a 'primary' ` +
+    `subject, that person's IDENTITY (face, hair, age, grooming); always the overall film grade. ` +
+    `NOT a fixed location or outfit — environment, wardrobe, background, and colors CHANGE per scene ` +
+    `to follow the narration. For 'incidental'/'none' subjects, anchor only the grade and recurring ` +
+    `motifs, NOT a single person.`
   );
 }
 
@@ -104,17 +221,25 @@ export function segmentationUser(
 // plus a portrait OVERLAY "window" (detail/product shot) over it. We prompt for
 // both layers at once so they read as one art-directed frame. `visualType` is
 // retained for signature compatibility but no longer selects a single medium.
-export function scenePromptSystem(_visualType: SceneVisualType): string {
+export function scenePromptSystem(_visualType: SceneVisualType, subject: SubjectOutput): string {
+  const s = subjectLang(subject);
   return (
     `You are a senior creative director and prompt engineer for the 69Labs generative model, ` +
     `art-directing a picture-in-picture luxury shot for a premium editorial YouTube channel. ` +
     `${HOUSE_STYLE.descriptor} You craft TWO complementary prompts per scene, PLUS the overlay's ` +
     `editing plan (position, motion, transition).\n\n` +
+    // Subject headline FIRST — this OVERRIDES any "woman" wording later in this
+    // prompt. Later text was written for the original single (woman) channel; when
+    // the detected subject is a man / both / a product, follow THIS block and read
+    // every "she/woman" below as "the subject described here".
+    `${s.headline}\n` +
+    `Throughout the rest of these instructions, wherever older wording says "she"/"the woman", ` +
+    `it means THE SUBJECT above (${s.noun}); use ${s.they}/${s.their} accordingly and apply the ` +
+    `same rules to that subject.\n\n` +
     `#1 RULE — HUMAN ANATOMY MUST BE REALISTIC (this is the most important instruction; the ` +
-    `client's top complaint is impossible bodies like "a woman with three hands"): whenever a ` +
+    `client's top complaint is impossible bodies like "three hands"): whenever a ` +
     `person or a body part appears in EITHER layer, the prompt MUST explicitly pin the count. ` +
-    `Write phrases such as "exactly one woman, with exactly two hands and five fingers on each ` +
-    `hand, natural correct human anatomy" (for people) or "a single pair of well-manicured hands, ` +
+    `Write phrases such as "${s.anatomy}" (for a person) or "a single pair of well-manicured hands, ` +
     `exactly two hands, ten fingers total, anatomically correct" (for hand close-ups). NEVER ` +
     `describe a composition that could imply extra or duplicated hands/arms — do NOT put two ` +
     `people's hands reaching into the same tight frame, do NOT describe "hands" ambiguously, and ` +
@@ -233,6 +358,8 @@ export interface ScenePromptContext {
   styleGuideJson: string;
   promptStrategyJson: string;
   anchors: string[];
+  /** The on-screen subject detected from the narration (woman/man/both/none). */
+  subject: SubjectOutput;
   current: {
     title: string;
     summary: string;
@@ -255,19 +382,29 @@ export interface ScenePromptContext {
 }
 
 export function scenePromptUser(c: ScenePromptContext): string {
+  const s = subjectLang(c.subject);
+  // Continuity wording adapts to the detected subject: hold ONE identity only for
+  // a 'primary' person; for incidental/none subjects, carry just the grade.
+  const identityClause = s.holdsIdentity
+    ? `the SAME ${s.noun} (same face, hair, age, look) and the same film grade`
+    : `the same film grade and overall look (there is no single recurring person to hold)`;
   const prev = c.previous
     ? `PREVIOUS SCENE ("${c.previous.title}") prompt was:\n${c.previous.positivePrompt}\n` +
-      `Continuity means the SAME WOMAN (same face, hair, age, refined look) and the same warm ` +
-      `film grade — NOT the same room or outfit. This scene's ENVIRONMENT, WARDROBE, BACKGROUND, ` +
-      `COLORS, and ACTION must CHANGE to match THIS scene's narration (see below); do not simply ` +
-      `repeat the previous scene's setting or clothing.`
-    : `This is the opening scene — establish the woman's look (identity + grade) that later scenes ` +
-      `keep, while each later scene's setting, wardrobe, and action shift to follow its narration.`;
+      `Continuity means ${identityClause} — NOT the same room or outfit. This scene's ENVIRONMENT, ` +
+      `WARDROBE, BACKGROUND, COLORS, and ACTION must CHANGE to match THIS scene's narration (see ` +
+      `below); do not simply repeat the previous scene's setting or clothing.`
+    : s.holdsIdentity
+      ? `This is the opening scene — establish the ${s.noun}'s look (identity + grade) that later ` +
+        `scenes keep, while each later scene's setting, wardrobe, and action shift to follow its narration.`
+      : `This is the opening scene — establish the look and grade that later scenes keep, while each ` +
+        `scene's setting and content shift to follow its narration.`;
   const next = c.next
     ? `NEXT SCENE ("${c.next.title}"): ${c.next.summary}. Compose so the cut into it feels natural.`
     : `This is the final scene — give it a sense of resolution.`;
 
   return (
+    `${s.headline}\n(Wherever wording below says "she"/"the woman", it means this subject: ` +
+    `${s.noun}, ${s.they}/${s.their}.)\n\n` +
     `GLOBAL STYLE GUIDE:\n${c.styleGuideJson}\n` +
     `PROMPT STRATEGY:\n${c.promptStrategyJson}\n` +
     `CONTINUITY ANCHORS (must hold): ${c.anchors.join(', ')}\n\n` +

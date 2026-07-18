@@ -85,7 +85,13 @@ export class AnalysisService {
       visualMotifs: analysis.data.visualMotifs as unknown as Json,
       styleGuide: analysis.data.styleGuide as unknown as Json,
       promptStrategy: analysis.data.promptStrategy as unknown as Json,
-      continuityMemory: { anchors: analysis.data.continuityAnchors } as unknown as Json,
+      // Carry the detected SUBJECT alongside anchors so every scene prompt knows
+      // who/what is on screen (woman / man / both / none) instead of assuming a
+      // woman. Rides continuity_memory — the same channel scene prompts already read.
+      continuityMemory: {
+        anchors: analysis.data.continuityAnchors,
+        subject: analysis.data.subject,
+      } as unknown as Json,
       raw: analysis.data as unknown as Json,
     });
     await this.recordAI(projectId, 'analyze', analysis.usage);

@@ -9,6 +9,7 @@ import {
   assignImageWithWoman,
   env,
   type ScenePromptOutput,
+  type SubjectOutput,
 } from '@yulia/core';
 import type { Json, SceneRow } from '@yulia/db';
 import { OpenAIService, type StructuredResult } from '@yulia/services';
@@ -58,6 +59,9 @@ export class PromptGenerationService {
     const styleGuideJson = JSON.stringify(analysis.style_guide);
     const promptStrategyJson = JSON.stringify(analysis.prompt_strategy);
     const anchors = extractAnchors(analysis.continuity_memory);
+    // Who/what is on screen, detected from the narration in the analysis stage.
+    // Every scene prompt uses this instead of assuming a woman.
+    const subject = extractSubject(analysis.continuity_memory);
 
     // Deterministically pick ~30% of the IMAGE scenes to FEATURE THE WOMAN (with
     // the object) instead of the object alone — client asked for more images with
@@ -66,7 +70,14 @@ export class PromptGenerationService {
     // scene's flag rides into its prompt.
     const imageWithWoman = assignImageWithWoman(scenes.map((s) => s.visual_type));
 
-    const shared = { styleGuideJson, promptStrategyJson, anchors, total: scenes.length, imageWithWoman };
+    const shared = {
+      styleGuideJson,
+      promptStrategyJson,
+      anchors,
+      subject,
+      total: scenes.length,
+      imageWithWoman,
+    };
 
     // RESUME: skip scenes that already have a prompt. `mapLimit` rejects on the
     // first error, so ONE scene's transient failure (e.g. an OpenAI TPM 429 on a
@@ -114,6 +125,7 @@ export class PromptGenerationService {
       styleGuideJson: string;
       promptStrategyJson: string;
       anchors: string[];
+      subject: SubjectOutput;
       total: number;
       imageWithWoman: boolean[];
     },
@@ -141,13 +153,14 @@ export class PromptGenerationService {
     const result: StructuredResult<ScenePromptOutput> = await this.ai.complete<ScenePromptOutput>({
       schema: ScenePromptSchema,
       schemaName: 'scene_prompt',
-      system: scenePromptSystem(scene.visual_type),
+      system: scenePromptSystem(scene.visual_type, shared.subject),
       user: scenePromptUser({
         index: i,
         total: shared.total,
         styleGuideJson: shared.styleGuideJson,
         promptStrategyJson: shared.promptStrategyJson,
         anchors: shared.anchors,
+        subject: shared.subject,
         current: {
           title: scene.title ?? `Scene ${i + 1}`,
           summary: scene.summary ?? '',
@@ -262,4 +275,33 @@ function extractAnchors(continuityMemory: unknown): string[] {
     if (Array.isArray(anchors)) return anchors.map((a) => String(a));
   }
   return [];
+}
+
+/**
+ * Read the detected on-screen subject from continuity_memory. Falls back to the
+ * legacy "a woman" default for projects analyzed BEFORE subject detection existed
+ * (their continuity_memory has no `subject`), so old projects reconcile to the
+ * behavior they were built with.
+ */
+function extractSubject(continuityMemory: unknown): SubjectOutput {
+  if (continuityMemory && typeof continuityMemory === 'object' && 'subject' in continuityMemory) {
+    const s = (continuityMemory as { subject: unknown }).subject;
+    if (s && typeof s === 'object') {
+      const o = s as Record<string, unknown>;
+      const presence = o.presence;
+      const gender = o.gender;
+      if (
+        (presence === 'primary' || presence === 'incidental' || presence === 'none') &&
+        (gender === 'woman' || gender === 'man' || gender === 'both' || gender === 'na')
+      ) {
+        return {
+          presence,
+          gender,
+          description: typeof o.description === 'string' ? o.description : '',
+        };
+      }
+    }
+  }
+  // Legacy default: the tool's original single-channel behavior was always a woman.
+  return { presence: 'primary', gender: 'woman', description: 'an elegant adult woman' };
 }

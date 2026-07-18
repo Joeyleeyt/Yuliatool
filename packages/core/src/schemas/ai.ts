@@ -32,13 +32,40 @@ export const PromptStrategySchema = z.object({
   avoidList: z.array(z.string()),
 });
 
+/**
+ * The on-screen human subject, DETECTED FROM THE NARRATION (not assumed). The
+ * tool serves multiple channels — fashion (a woman), nostalgia (a man, or period
+ * people, or none), product reviews (the product, presenter optional) — so who
+ * appears must follow the script, not a hardcoded default.
+ *
+ *   - `presence` — is a specific recurring PERSON the subject at all?
+ *       'primary'  : one recurring person the video centers on (fashion, a vlog).
+ *       'incidental': people appear but no single recurring identity to hold
+ *                     (period crowds, a street scene) — anatomy still applies,
+ *                     continuity of one face does not.
+ *       'none'     : the subject is a product / place / concept; a person appears
+ *                     only if a specific beat's narration names one.
+ *   - `gender` — for a 'primary' subject: 'woman' | 'man' | 'both'; else 'na'.
+ *   - `description` — a short casting brief the scene prompts reuse, e.g.
+ *       "an elegant adult woman", "a middle-aged man reminiscing",
+ *       "the product itself; no presenter".
+ */
+export const SubjectSchema = z.object({
+  presence: z.enum(['primary', 'incidental', 'none']),
+  gender: z.enum(['woman', 'man', 'both', 'na']),
+  description: z.string(),
+});
+export type SubjectOutput = z.infer<typeof SubjectSchema>;
+
 export const AnalysisSchema = z.object({
   summary: z.string(),
   emotionalArc: z.array(EmotionalBeatSchema),
   visualMotifs: z.array(z.string()),
   styleGuide: StyleGuideSchema,
   promptStrategy: PromptStrategySchema,
-  /** Recurring anchors (the woman's look, key locations) to hold continuity. */
+  /** Who/what the video is about on screen, detected from the narration. */
+  subject: SubjectSchema,
+  /** Recurring anchors (the subject's look, key locations) to hold continuity. */
   continuityAnchors: z.array(z.string()),
 });
 export type AnalysisOutput = z.infer<typeof AnalysisSchema>;
