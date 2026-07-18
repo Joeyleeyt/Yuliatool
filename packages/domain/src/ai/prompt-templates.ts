@@ -432,32 +432,54 @@ export function scenePromptUser(c: ScenePromptContext): string {
     `never be a generic luxury filler that ignores the words — a viewer hearing the voiceover should ` +
     `recognise the image as the SAME subject. When the beat names a concrete object it stays the ` +
     `clear FOCAL POINT and hero. ` +
+    // WEARABLE-GARMENT RULE (highest priority for this image): clothing must be
+    // shown WORN by the subject, never displayed empty. A suit on a chair / a
+    // dress on a hanger / shoes on a shelf reads as a catalog, not editorial —
+    // and it's the exact "mannequin/dress-form" look the client rejected. So if
+    // THIS beat's object is something a person wears, always feature the matched
+    // person wearing it, regardless of the 30% object/person mix below.
+    `WEARABLE CHECK (do this first) — is the object THIS beat names something a person WEARS ` +
+    `(a suit, jacket, blazer, coat, dress, shirt, trousers, skirt, knitwear, shoes, a bag/scarf/hat ` +
+    `worn on the body, jewelry on a person)? If YES: the image MUST show a person WEARING / carrying ` +
+    `that exact garment in an elegant full-length editorial shot — NEVER the garment alone on a ` +
+    `chair, hanger, mannequin, or dress form. ` +
+    (s.holdsIdentity
+      ? `Use the SAME recurring ${s.noun} as the model (keep ${s.their} identity).`
+      : `Cast a model whose GENDER MATCHES THE GARMENT — a man for menswear (a men's suit, men's ` +
+        `shirt), a woman for womenswear — read the narration and the item to decide; if genuinely ` +
+        `unisex, either is fine.`) +
+    ` The person is the model; the garment the narration names is the hero. Pin the anatomy (exactly ` +
+    `one person, two hands with five fingers each, two feet, full body head-to-toe, anatomically ` +
+    `correct), exactly one person in frame. This overrides the object/person choice below.\n` +
     (c.imageFeaturesWoman
-      ? `FOR THIS IMAGE, FEATURE THE SAME WOMAN together WITH the object (do NOT show the object ` +
-        `alone) — the client wants more images that include a person, not only objects.\n` +
-        `   OBJECT-WOMAN MATCH (critical) — the object with her must be the EXACT object THIS ` +
+      ? `FOR THIS IMAGE (non-wearable object), FEATURE THE ${s.noun.toUpperCase()} together WITH the ` +
+        `object (do NOT show the object alone) — the client wants more images that include a person, ` +
+        `not only objects.\n` +
+        `   SUBJECT-OBJECT MATCH (critical) — the object with ${s.them} must be the EXACT object THIS ` +
         `scene's narration names (the same product / detail the object-only images would show), ` +
-        `and she must be ACTIVELY CONNECTED to it, not just near it: she is holding, using, ` +
-        `wearing, or presenting THAT specific object so the viewer instantly reads "this woman ` +
-        `with this object". Name the object explicitly in the prompt and make it clearly ` +
+        `and ${s.they} must be ACTIVELY CONNECTED to it, not just near it: ${s.they} is holding, ` +
+        `using, wearing, or presenting THAT specific object so the viewer instantly reads "this ` +
+        `${s.noun} with this object". Name the object explicitly in the prompt and make it clearly ` +
         `readable and in-focus; do NOT substitute a generic prop or leave the object as a vague ` +
-        `background item. The object and the woman must obviously belong to the same beat.\n` +
-        `   FRAMING (critical) — show her FULL BODY, head-to-toe, in an elegant full-length ` +
+        `background item. The object and the ${s.noun} must obviously belong to the same beat.\n` +
+        `   FRAMING (critical) — show ${s.their} FULL BODY, head-to-toe, in an elegant full-length ` +
         `editorial shot within the setting the beat describes (a wide/medium-wide composition that ` +
-        `includes her from head to feet, standing or seated naturally) WHILE the narrated object ` +
-        `stays clearly visible and connected to her. She is the same real, living, naturally ` +
-        `proportioned adult woman (not a mannequin, not a frozen pose), posed elegantly. Keep it a ` +
-        `poised, high-end fashion full-body look. Pin the anatomy: "exactly one woman, full body, ` +
-        `head to toe, two hands, five fingers per hand, two feet, correct natural human ` +
-        `proportions, anatomically correct"; keep exactly one person in frame so nothing can fuse ` +
-        `into an impossible body. Staged in beautiful editorial light, composed edge-to-edge for ` +
-        `the 16:9 frame.\n` +
+        `includes ${s.them} from head to feet, standing or seated naturally) WHILE the narrated object ` +
+        `stays clearly visible and connected to ${s.them}. ${s.they[0]!.toUpperCase()}${s.they.slice(1)} ` +
+        `is a real, living, naturally proportioned adult ${s.noun} (not a mannequin, not a frozen ` +
+        `pose), posed elegantly. Keep it a poised, high-end fashion full-body look. Pin the anatomy: ` +
+        `"${s.anatomy}, full body, head to toe, two feet, correct natural human proportions"; keep ` +
+        `exactly one person in frame so nothing can fuse into an impossible body. Staged in beautiful ` +
+        `editorial light, composed edge-to-edge for the 16:9 frame.\n` +
         `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME beat ` +
         `(another angle / staging) that the gallery rotates to on longer scenes — it MAY show the ` +
-        `object alone for variety — or null if one image is enough.\n\n`
-      : `FOR THIS IMAGE, show the hero object BY ITSELF (no person, no hands): beautifully staged on ` +
-        `a luxury surface (silk / marble / velvet / linen) with editorial light, composed ` +
-        `edge-to-edge for the 16:9 frame (NOT marooned in negative space, NOT a centered dot).\n` +
+        `object alone for variety (UNLESS the object is wearable, in which case keep it worn) — or ` +
+        `null if one image is enough.\n\n`
+      : `FOR THIS IMAGE (non-wearable object only — if the object is WEARABLE, follow the WEARABLE ` +
+        `CHECK above and show it worn instead), show the hero object BY ITSELF (no person, no hands): ` +
+        `beautifully staged on a luxury surface (silk / marble / velvet / linen) with editorial ` +
+        `light, composed edge-to-edge for the 16:9 frame (NOT marooned in negative space, NOT a ` +
+        `centered dot).\n` +
         `   Also provide overlayPrompt2: a SECOND, DIFFERENT full-frame composition of the SAME ` +
         `object (another angle / detail / staging, not a repeat) that the gallery rotates to on ` +
         `longer scenes — set it to null if this scene only needs one image.\n\n`) +
