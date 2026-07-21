@@ -234,7 +234,12 @@ export function segmentationUser(
     `For each scene give: title, summary, visualIntent, subject, environment, mood, and ` +
     `continuityNotes. The ENVIRONMENT must be chosen from THIS scene's narration and should VARY ` +
     `from neighbouring scenes (a new, fitting location per beat — avoid repeating one room); the ` +
-    `subject/visualIntent should depict what the narration actually names. continuityNotes carry ` +
+    `subject/visualIntent should depict what the narration actually names. CONTENT SAFETY: never ` +
+    `describe a visualIntent/subject that puts a CHILD or MINOR with smoking, cigarettes (real or ` +
+    `candy), alcohol, drugs, weapons, or any adult/vice/suggestive/violent context (a downstream ` +
+    `generator refuses such shots and the whole video fails). For a beat like that, make the ` +
+    `visualIntent a SAFE alternative — the product/candy as a still object, the vintage shop or era, ` +
+    `or an adult reminiscing — never a child using or mimicking it. continuityNotes carry ` +
     `only the woman's identity and the warm grade forward (NOT a fixed room or outfit). Group scenes ` +
     `that belong to the same topic under the SAME title so the pipeline can number them as one ` +
     `listicle item. Each scene must be visually self-contained.`
@@ -307,6 +312,20 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `medium shot) so no melted feet are shown at all. A clean knee-up shot is FAR better than a ` +
     `full-length shot with dissolving feet. Never let legs blur, taper, fuse, or melt into the ` +
     `floor.\n\n` +
+    `#5 RULE — CONTENT SAFETY (a scene the generator REFUSES fails the whole video; a prompt that ` +
+    `depicts minors with adult/vice imagery is blocked every time). NEVER depict a CHILD or MINOR ` +
+    `together with smoking, cigarettes (real OR candy/pretend), vaping, alcohol, drugs, weapons, ` +
+    `gambling, or any suggestive/violent context — even nostalgically or humorously. If the ` +
+    `narration mentions such a thing (e.g. "candy cigarettes", "sweets shaped like cigars"), depict ` +
+    `it SAFELY: show the CANDY/PRODUCT ITSELF as a still-life hero object (a candy cigarette in its ` +
+    `retro packaging on a counter), or an ADULT reminiscing, or the vintage shop/era — but NEVER a ` +
+    `child using or mimicking it. More generally, keep every prompt to imagery a mainstream ` +
+    `video/image model will generate without refusal: no minors in any adult/vice/suggestive/` +
+    `dangerous scenario, no graphic violence, no explicit content, no hateful or protected-symbol ` +
+    `imagery. When a beat's literal content would be unsafe to depict, reframe it to the nearest ` +
+    `SAFE visual that still follows the narration (the object, the place, the era, or an adult), and ` +
+    `NEVER put a person in the frame for that beat if the only person the words imply is a child in ` +
+    `a blocked context.\n\n` +
     `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
     `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
     `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +

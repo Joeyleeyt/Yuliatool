@@ -67,6 +67,9 @@ export const HOUSE_STYLE = {
     'feet merging with the floor, blurred lower body, legs tapering into a blur, feet without ' +
     'clear boundary, legs disappearing behind furniture, feet clipped by the table, ' +
     'smeared shins, indistinct feet, feet blending into a pale floor, ' +
+    // --- content safety (a refused prompt fails the whole video — keep imagery generatable) ---
+    'child smoking, minor smoking, children with cigarettes, kids with candy cigarettes, ' +
+    'child pretending to smoke, minors with alcohol, children with weapons, ' +
     // --- generic quality ---
     'lowres, blurry, deformed, disfigured, watermark, text, logo, cartoon, cgi look, ' +
     'plastic skin, oversaturated, harsh flash, cluttered background, amateur, ' +

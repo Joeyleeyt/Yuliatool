@@ -14,7 +14,7 @@ import {
   RENDER_ENCODING,
   env,
 } from '@yulia/core';
-import type { SceneRow, Json } from '@yulia/db';
+import type { SceneRow, AssetRow, Json } from '@yulia/db';
 import { compositeSegment, concatAndMux, type RenderSegment } from '@yulia/ffmpeg';
 import type { AppContext } from '../context.js';
 import { ProjectService } from './project.service.js';
@@ -249,11 +249,26 @@ export class RenderService {
         segment = { imagePaths, displayDurationSec };
       } else {
         // VIDEO scene: one or more ~8s clips played back-to-back at full frame.
-        const backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(
+        let backgrounds = (await this.ctx.repos.assets.listSceneVideos(scene.id)).filter(
           (b) => b.status === 'stored' && b.r2_key,
         );
-        if (backgrounds.length === 0)
-          throw new ValidationError('Scene background missing', { sceneId: scene.id });
+        if (backgrounds.length === 0) {
+          // This scene has NO usable clip — every slot was skipped as permanently
+          // un-generatable (e.g. content-moderation refused it). Rather than fail
+          // the whole render, BORROW the nearest neighbour scene's stored clip so
+          // the timeline stays continuous. The voiceover still plays over it; the
+          // beat just shows adjacent footage instead of a hard gap.
+          const borrowed = await this.nearestSceneVideo(scenes, i);
+          if (!borrowed)
+            throw new ValidationError('Scene background missing (no neighbour to borrow)', {
+              sceneId: scene.id,
+            });
+          this.ctx.logger.warn(
+            { sceneId: scene.id, borrowedFrom: borrowed.scene_id },
+            'render: scene had no clip (all skipped); borrowing a neighbour clip',
+          );
+          backgrounds = [borrowed];
+        }
         const backgroundPaths: string[] = [];
         await Promise.all(
           backgrounds.map((bg, slot) => {
@@ -275,6 +290,25 @@ export class RenderService {
       normalized: results.map((r) => r.normalizedPath),
       displayDurations: results.map((r) => r.displayDurationSec),
     };
+  }
+
+  /**
+   * Find the nearest scene (by index distance from `i`) that has a stored video
+   * clip, so a scene whose own clips were all skipped (content-blocked) can borrow
+   * one and the timeline stays continuous. Searches outward — i-1, i+1, i-2, i+2,
+   * … — and returns the first stored VIDEO_CLIP asset found, or null if none.
+   */
+  private async nearestSceneVideo(scenes: SceneRow[], i: number): Promise<AssetRow | null> {
+    for (let d = 1; d < scenes.length; d++) {
+      for (const j of [i - d, i + d]) {
+        if (j < 0 || j >= scenes.length) continue;
+        const vids = (await this.ctx.repos.assets.listSceneVideos(scenes[j]!.id)).filter(
+          (b) => b.status === 'stored' && b.r2_key,
+        );
+        if (vids.length > 0) return vids[0]!;
+      }
+    }
+    return null;
   }
 
   private async download(key: string, dest: string): Promise<void> {

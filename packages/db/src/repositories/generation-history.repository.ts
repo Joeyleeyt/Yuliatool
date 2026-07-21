@@ -57,4 +57,18 @@ export class GenerationHistoryRepository {
       returning *`;
     return rows[0]!;
   }
+
+  /**
+   * How many times a scene's generation has hard-FAILED at the given operation
+   * (e.g. 'poll'). Used to detect a permanently un-generatable layer (a
+   * moderation-refused prompt fails identically forever) and skip it instead of
+   * retrying into a whole-project failure. Counts across resubmits because it
+   * keys on scene_id, not the per-attempt asset_id.
+   */
+  async countFailures(sceneId: string, operation: string): Promise<number> {
+    const rows = await this.sql<{ n: number }[]>`
+      select count(*)::int as n from generation_history
+      where scene_id = ${sceneId} and operation = ${operation} and status = 'failed'`;
+    return rows[0]?.n ?? 0;
+  }
 }

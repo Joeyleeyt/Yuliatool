@@ -54,6 +54,18 @@ const SUBMIT_STAGGER_MS = 600;
 const RECONCILE_BUDGET_POLL_TIMEOUTS = 2;
 
 /**
+ * How many times 69Labs may return status=FAILED for the SAME layer before we
+ * stop retrying it and SKIP it. A transient failure clears on a resubmit; a
+ * prompt the generator REFUSES (e.g. content moderation — a child + smoking beat)
+ * fails identically forever, so without a cap it burns all 10 BullMQ attempts and
+ * then fails the WHOLE video over one un-generatable scene. Past this many hard
+ * failures we treat the layer as permanently blocked: skip it (non-retryable) so
+ * the rest of the project completes. Counted from generation_history's 'failed'
+ * poll rows for this asset.
+ */
+const MAX_LAYER_FAILURES = 3;
+
+/**
  * Per-scene generation for the picture-in-picture composite. Every scene has
  * TWO layers, produced by a single job:
  *   - background: a wide 16:9 VIDEO clip (kind 'video' -> VIDEO_CLIP asset)
@@ -206,6 +218,9 @@ export class SceneGenerationService {
     // speed), so each is looked up + persisted by its rotation/sequence slot.
     let asset = await this.ctx.repos.assets.findSceneImageBySlot(sceneId, assetKind, slot);
     if (asset?.status === 'stored') return; // fully done
+    // A slot parked in 'failed' is permanently un-generatable (content-blocked —
+    // see the failure cap below). Do NOT retry it; the scene proceeds without it.
+    if (asset?.status === 'failed') return;
     if (!asset) {
       asset = await this.ctx.repos.assets.create({
         projectId,
@@ -310,6 +325,29 @@ export class SceneGenerationService {
         result.error,
         result.raw,
       );
+      // A layer that has now hard-FAILED more than MAX_LAYER_FAILURES times is
+      // treated as permanently un-generatable (almost always a content-moderation
+      // refusal — the same prompt fails identically every time). Skip it instead
+      // of retrying into a whole-project failure: mark the asset SKIPPED and throw
+      // NON-retryable so BullMQ stops re-running this scene. The scene proceeds
+      // with whatever OTHER slots stored; a scene left with zero clips is handled
+      // by the render's neighbor-fallback (see render.service.ts).
+      const failures = await this.ctx.repos.generationHistory.countFailures(sceneId, 'poll');
+      if (failures >= MAX_LAYER_FAILURES) {
+        // Permanently un-generatable (almost always content-moderation). Mark the
+        // slot SKIPPED and RETURN (don't throw): the scene's other slots proceed,
+        // Promise.all resolves, and the project completes. A scene left with zero
+        // clips is covered by the render's neighbor-fallback. Returning (not
+        // throwing) is what keeps ONE blocked slot from failing the whole video.
+        // Park the slot in 'failed' (no new enum needed) — the top-of-runLayer
+        // check and the render both treat a 'failed' slot as "skip, don't retry".
+        await this.ctx.repos.assets.updateStatus(asset.id, 'failed');
+        this.ctx.logger.error(
+          { projectId, sceneId, kind, slot, failures },
+          '69labs layer permanently un-generatable (likely content-blocked); skipping it',
+        );
+        return;
+      }
       throw new ExternalServiceError('69labs', `generation failed: ${result.error ?? 'unknown'}`, {
         retryable: true,
       });
