@@ -234,12 +234,16 @@ export function segmentationUser(
     `For each scene give: title, summary, visualIntent, subject, environment, mood, and ` +
     `continuityNotes. The ENVIRONMENT must be chosen from THIS scene's narration and should VARY ` +
     `from neighbouring scenes (a new, fitting location per beat — avoid repeating one room); the ` +
-    `subject/visualIntent should depict what the narration actually names. CONTENT SAFETY: never ` +
-    `describe a visualIntent/subject that puts a CHILD or MINOR with smoking, cigarettes (real or ` +
-    `candy), alcohol, drugs, weapons, or any adult/vice/suggestive/violent context (a downstream ` +
-    `generator refuses such shots and the whole video fails). For a beat like that, make the ` +
-    `visualIntent a SAFE alternative — the product/candy as a still object, the vintage shop or era, ` +
-    `or an adult reminiscing — never a child using or mimicking it. continuityNotes carry ` +
+    `subject/visualIntent should depict what the narration actually names. PRODUCT NAMES ARE ` +
+    `PRODUCTS: when a beat names a sweet/toy/brand, the visualIntent is the ACTUAL ITEM, not a ` +
+    `literal reading of its name — "candy cigarettes" (an old Dutch sweet) is a chalky candy stick ` +
+    `in retro packaging, NOT a cigarette or smoking; "gun-shaped lollipop" is a lollipop. CONTENT ` +
+    `SAFETY: never describe a visualIntent/subject that puts a CHILD or MINOR with smoking, ` +
+    `cigarettes (real or candy), alcohol, drugs, weapons, or any adult/vice/suggestive/violent ` +
+    `context (a downstream generator refuses such shots and the whole video fails). For a beat like ` +
+    `that, make the visualIntent a SAFE alternative — the product/candy as a still object, the ` +
+    `vintage shop or era, or an adult reminiscing — never a child using or mimicking it. ` +
+    `continuityNotes carry ` +
     `only the woman's identity and the warm grade forward (NOT a fixed room or outfit). Group scenes ` +
     `that belong to the same topic under the SAME title so the pipeline can number them as one ` +
     `listicle item. Each scene must be visually self-contained.`
@@ -326,6 +330,17 @@ export function scenePromptSystem(_visualType: SceneVisualType, subject: Subject
     `SAFE visual that still follows the narration (the object, the place, the era, or an adult), and ` +
     `NEVER put a person in the frame for that beat if the only person the words imply is a child in ` +
     `a blocked context.\n\n` +
+    `#6 RULE — PRODUCT NAMES ARE PRODUCTS, NOT THEIR LITERAL WORDS (client insight: "cigarette ` +
+    `candy" is the NAME of an old Dutch sweet; the model wrongly drew real cigarettes/smoking). When ` +
+    `the narration names a PRODUCT, TREAT, TOY, or brand, depict the ACTUAL ITEM, not a literal ` +
+    `reading of the words in its name. A "candy cigarette" is a small chalky white CANDY STICK in ` +
+    `retro packaging — NOT a cigarette and NOT anyone smoking. Likewise: "gun-shaped lollipop" = a ` +
+    `LOLLIPOP; "beer gummies" = colourful GUMMY SWEETS; "bubble-gum cigars" = a wrapped stick of ` +
+    `GUM. The category word (candy, sweet, gummy, lollipop, chocolate, toy) is the truth of what to ` +
+    `show; the descriptive word (cigarette, gun, beer) only hints at its shape/flavour and must ` +
+    `NEVER become the real object. Show these as an appealing still-life of the sweet/product in ` +
+    `its vintage wrapper on a shop counter or in a hand. This keeps the visual faithful to the ` +
+    `narration AND avoids the model rendering (and refusing) the literal adult/vice object.\n\n` +
     `WHAT STAYS vs WHAT CHANGES (client's key note: scenes look too samey — the background, ` +
     `environment, wardrobe, colors, and actions barely change). ONLY these stay constant across the ` +
     `whole video: the WOMAN'S IDENTITY (same face, hair, age, refined grooming) and the overall warm ` +
